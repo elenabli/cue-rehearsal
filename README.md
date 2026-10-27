@@ -35,3 +35,5 @@ PDF importer checks cover positioned text reconstruction, character headings, co
 Scenes without spoken lines are retained verbatim as stage directions. The actor can read or listen to them and move explicitly to the next scene, without a speech-recognition gate. A regression check covers the reported scene 12, transition to scene 13, persistence, and unchanged checking of actual dialogue.
 
 Unrecognized or empty scenes no longer block saving a whole play. They remain in the scene picker with an explicit review label and original text, without voice validation or a learned/completed state. Other scenes remain usable. Use the edit arrow beside the scene title to jump to its heading in the full-play editor.
+
+Character selection captures the native select value before pausing and rendering the screen. A regression check uses the same select element as the change-event target and verifies selection persistence, switching both ways, and the correct cue/listening turn.

@@ -58,7 +58,7 @@ $('start').onclick=()=>{if(['directions','review'].includes(data.scenes[data.act
 $('listen').onclick=listen;$('restart').onclick=()=>{pause();data.index=0;feedback();$('typed').value='';render();};
 $('hear-line').onclick=()=>{const text=['directions','review'].includes(data.scenes[data.activeScene].kind)?data.script:lines[data.index]?.text;if(text){pause();speak(text);}};
 function toggleHide(){data.hide=!data.hide;render();}$('reveal-line').onclick=toggleHide;$('hide-toggle').onclick=toggleHide;
-$('role').onchange=e=>{pause();data.role=e.target.value;data.index=0;feedback();render();};
+$('role').onchange=e=>{const selectedRole=e.target.value;if(!roles.includes(selectedRole))return;pause();data.role=selectedRole;data.index=0;feedback();render();};
 $('typed-form').onsubmit=e=>{e.preventDefault();if(!recognition&&!speaking){clearTimeout(advanceTimer);check([$('typed').value]);}};
 $('pace').value=data.pace;$('pace').onchange=e=>{pause();data.pace=e.target.value;persist();};
 $('language').value=data.language;$('language').onchange=e=>{pause();data.language=e.target.value;data.voice='';populateVoices();persist();};

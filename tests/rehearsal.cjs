@@ -55,3 +55,10 @@ get('start').onclick();assert.equal(get('current-line').textContent,'Здрав�
 console.log('Review-scene checks passed: full-play saving, original text retention, explicit review labels, no speech completion, next-scene access, empty scenes, and reload.');
 
 get('script-input').value='   ';get('save-script').onclick();assert.equal(vm.runInContext('data.scenes.length',ctx),4,'A completely blank editor must not replace the saved play');assert(get('script-message').textContent.includes('Add a script'));
+// Model a real native select: render() changes the same event target's value.
+get('script-input').value='СЦЕНА 1\nСЕРГЕЙ: Доброе утро.\nАННА: Привет.';get('save-script').onclick();
+get('role').value='АННА';get('role').onchange({target:get('role')});
+assert.equal(vm.runInContext('data.role',ctx),'АННА','Character selection must use the chosen value before pause/render updates the select');assert.equal(get('role').value,'АННА');assert.equal(get('role-name').textContent,'АННА');assert.equal(JSON.parse(snapshot).role,'АННА','Selected character is saved');
+get('start').onclick();assert.equal(spoken.at(-1).text,'Доброе утро.','Partner speaks the other character’s cue');spoken.at(-1).onend();assert.equal(get('current-line').textContent,'Привет.');assert.equal(get('listen').disabled,false,'The chosen character can speak on their turn');
+get('role').value='СЕРГЕЙ';get('role').onchange({target:get('role')});assert.equal(vm.runInContext('data.role',ctx),'СЕРГЕЙ');assert.equal(index(),0);assert.equal(get('listen').disabled,false);
+console.log('Native character selection passed: chosen role survives render, saves, switches in both directions, and controls the correct rehearsal turn.');
