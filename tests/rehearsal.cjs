@@ -26,10 +26,10 @@ get('scene-picker').onchange({target:{value:'20'}});assert.equal(index(),0);asse
 get('typed').value='My line 21';get('typed-form').onsubmit({preventDefault(){}});flush();assert.equal(index(),1);
 get('scene-picker').onchange({target:{value:'0'}});assert.equal(index(),1,'Scene 1 remembers its line');get('scene-picker').onchange({target:{value:'20'}});assert.equal(index(),1,'Scene 21 remembers its line');
 vm.runInContext("showView('script')",ctx);assert(get('script-input').value.includes('Сцена 25'),'Editor keeps the full play, not just the selected scene');
-get('script-input').value='Сцена 1\nELENA: A monologue.\nСцена 2';get('save-script').onclick();assert.equal(vm.runInContext('data.scenes.length',ctx),25,'An empty scene cannot replace a saved play');assert(get('script-message').textContent.includes('Сцена 2'));
+
 let snapshot;ctx.localStorage.setItem=(key,value)=>{snapshot=value};vm.runInContext('persist()',ctx);assert.equal(JSON.parse(snapshot).scenes[20].index,1);
 const newElements=new Map();ctx.document.getElementById=id=>{if(!newElements.has(id))newElements.set(id,element());return newElements.get(id)};ctx.localStorage.getItem=()=>snapshot;vm.runInNewContext(fs.readFileSync('dist/app.js','utf8'),{...ctx});assert.equal(newElements.get('current-line').textContent,'Your cue 21.','Reload restores the active scene and progress');
-console.log('Scene rehearsal passed: all 25 scenes, isolated dialogue, independent progress, full-play editing, empty-scene protection, and reload.');
+console.log('Scene rehearsal passed: all 25 scenes, isolated dialogue, independent progress, full-play editing and reload.');
 // A scene with action but no dialogue must not prevent saving the whole play.
 ctx.document.getElementById=get;
 const scene12=`СЦЕНА 12. КВАРТИРА ГОРДЕЕВЫХ. НОЧЬ.
@@ -46,3 +46,12 @@ get('start').onclick();assert.equal(vm.runInContext('data.activeScene',ctx),1);a
 get('scene-picker').onchange({target:{value:'0'}});vm.runInContext('persist()',ctx);const stageElements=new Map();const stageCtx={...ctx,document:{...ctx.document,getElementById(id){if(!stageElements.has(id))stageElements.set(id,element());return stageElements.get(id)}}};vm.runInNewContext(fs.readFileSync('dist/app.js','utf8'),stageCtx);assert.equal(stageElements.get('current-line').textContent,scene12.split('\n').slice(1).join('\n'),'Direction-only scenes survive reload');
 get('script-input').value=scene12;get('save-script').onclick();assert.equal(get('script-message').textContent,'');assert.equal(get('start').disabled,true,'A final direction-only scene ends the play');
 console.log('Reported scene 12 passed: no dialogue required, exact text retained, optional narration, next-scene transition, reload, and speech gate unchanged for dialogue.');
+
+// Unrecognized or empty scenes are retained for review without blocking a play.
+const reviewText='СЦЕНА 18\nСЕРГЕЙ: Привет.\nСЦЕНА 19\nСЕРГЕЙ —\nСЦЕНА 20\nАННА: Здравствуй.\nСЦЕНА 21';
+get('script-input').value=reviewText;get('save-script').onclick();assert.equal(get('script-message').textContent,'');assert.equal(vm.runInContext('data.scenes.length',ctx),4);assert.equal(vm.runInContext('data.scenes[1].kind',ctx),'review');assert.equal(vm.runInContext('data.scenes[1].script',ctx),'СЕРГЕЙ —');assert.equal(vm.runInContext('data.scenes[3].kind',ctx),'review');assert.equal(vm.runInContext('data.playText',ctx),reviewText);
+get('scene-picker').onchange({target:{value:'1'}});assert.equal(get('listen').disabled,true);assert.equal(get('line-count').textContent,'REVIEW NEEDED');assert.equal(get('current-line').textContent,'СЕРГЕЙ —');assert(get('stage-tag').textContent.includes('ПРОВЕРЬТЕ'));assert(get('scene-picker').children[1].textContent.includes('проверить'));
+get('start').onclick();assert.equal(get('current-line').textContent,'Здравствуй.');get('scene-picker').onchange({target:{value:'1'}});vm.runInContext('persist()',ctx);const reviewElements=new Map();vm.runInNewContext(fs.readFileSync('dist/app.js','utf8'),{...ctx,document:{...ctx.document,getElementById(id){if(!reviewElements.has(id))reviewElements.set(id,element());return reviewElements.get(id)}}});assert.equal(reviewElements.get('line-count').textContent,'REVIEW NEEDED');assert.equal(reviewElements.get('current-line').textContent,'СЕРГЕЙ —');
+console.log('Review-scene checks passed: full-play saving, original text retention, explicit review labels, no speech completion, next-scene access, empty scenes, and reload.');
+
+get('script-input').value='   ';get('save-script').onclick();assert.equal(vm.runInContext('data.scenes.length',ctx),4,'A completely blank editor must not replace the saved play');assert(get('script-message').textContent.includes('Add a script'));
