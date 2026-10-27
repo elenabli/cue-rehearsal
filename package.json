@@ -1,1 +1,9 @@
-{"name":"cue-rehearsal","version":"1.0.0","private":true,"scripts":{"test":"node tests/rehearsal.cjs","start":"python3 -m http.server 4173 --directory dist"}}
+{
+  "name": "cue-rehearsal",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "test": "node tests/rehearsal.cjs && node tests/pdf-import.cjs",
+    "start": "python3 -m http.server 4173 --directory dist"
+  }
+}
