@@ -31,3 +31,5 @@ npm test
 The integration checks simulate browser speech events and verify wrong/interim/correct transcripts, typed checks, spoken cue progression, cancellation, and stale callbacks. Physical iPhone microphone, permission, install, and offline checks remain manual.
 
 PDF importer checks cover positioned text reconstruction, character headings, common dialogue separators, stage directions, Cyrillic, and text without character names. Real two-page PDF extraction, no-text PDF detection, and a 25-page Cyrillic play containing 25 scenes were also verified with the vendored PDF.js build. Scene checks cover 25+ scene selection, independent progress, reload, full-play editing/export, heading variants, repeated numbering across acts, and validation of empty scenes. iPhone file picker and Safari extraction still need physical-device verification.
+
+Scenes without spoken lines are retained verbatim as stage directions. The actor can read or listen to them and move explicitly to the next scene, without a speech-recognition gate. A regression check covers the reported scene 12, transition to scene 13, persistence, and unchanged checking of actual dialogue.

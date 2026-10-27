@@ -30,3 +30,19 @@ get('script-input').value='Сцена 1\nELENA: A monologue.\nСцена 2';get(
 let snapshot;ctx.localStorage.setItem=(key,value)=>{snapshot=value};vm.runInContext('persist()',ctx);assert.equal(JSON.parse(snapshot).scenes[20].index,1);
 const newElements=new Map();ctx.document.getElementById=id=>{if(!newElements.has(id))newElements.set(id,element());return newElements.get(id)};ctx.localStorage.getItem=()=>snapshot;vm.runInNewContext(fs.readFileSync('dist/app.js','utf8'),{...ctx});assert.equal(newElements.get('current-line').textContent,'Your cue 21.','Reload restores the active scene and progress');
 console.log('Scene rehearsal passed: all 25 scenes, isolated dialogue, independent progress, full-play editing, empty-scene protection, and reload.');
+// A scene with action but no dialogue must not prevent saving the whole play.
+ctx.document.getElementById=get;
+const scene12=`СЦЕНА 12. КВАРТИРА ГОРДЕЕВЫХ. НОЧЬ.
+На кухне сидит Сергей в новых носках и трусах.
+Один.
+На столе бутылка водки.
+Он наливает ее в стакан и пьет.
+Наливает и пьет.
+Снова наливает и снова пьет.`;
+get('script-input').value=scene12+'\nСЦЕНА 13. КВАРТИРА ГОРДЕЕВЫХ. ДЕНЬ.\nСЕРГЕЙ: Доброе утро.\nАННА: Привет.';get('save-script').onclick();
+assert.equal(get('script-message').textContent,'');assert.equal(vm.runInContext('data.scenes.length',ctx),2);assert.equal(vm.runInContext('data.scenes[0].kind',ctx),'directions');assert.equal(get('current-line').textContent,scene12.split('\n').slice(1).join('\n'),'Narration is preserved verbatim');assert.equal(get('listen').disabled,true);assert.equal(get('typed').disabled,true);assert.equal(get('start').disabled,false);assert(get('start').innerHTML.includes('Следующая сцена'));assert.equal(get('progress').value,0);
+const beforeNarration=spoken.length;get('hear-line').onclick();assert.equal(spoken.length,beforeNarration+1);assert.equal(spoken.at(-1).text,vm.runInContext('data.scenes[0].script',ctx));spoken.at(-1).onend();assert.equal(vm.runInContext('data.activeScene',ctx),0,'Narration playback does not auto-advance');
+get('start').onclick();assert.equal(vm.runInContext('data.activeScene',ctx),1);assert.equal(get('current-line').textContent,'Доброе утро.');assert.equal(get('start').disabled,false);get('typed').value='Неверная реплика';get('typed-form').onsubmit({preventDefault(){}});flush();assert.equal(index(),0,'Actual dialogue still requires the right words');
+get('scene-picker').onchange({target:{value:'0'}});vm.runInContext('persist()',ctx);const stageElements=new Map();const stageCtx={...ctx,document:{...ctx.document,getElementById(id){if(!stageElements.has(id))stageElements.set(id,element());return stageElements.get(id)}}};vm.runInNewContext(fs.readFileSync('dist/app.js','utf8'),stageCtx);assert.equal(stageElements.get('current-line').textContent,scene12.split('\n').slice(1).join('\n'),'Direction-only scenes survive reload');
+get('script-input').value=scene12;get('save-script').onclick();assert.equal(get('script-message').textContent,'');assert.equal(get('start').disabled,true,'A final direction-only scene ends the play');
+console.log('Reported scene 12 passed: no dialogue required, exact text retained, optional narration, next-scene transition, reload, and speech gate unchanged for dialogue.');
