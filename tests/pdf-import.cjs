@@ -12,3 +12,13 @@ assert.deepEqual(parseScript(convertPlayText('ЕЛЕНА\nЯ остаюсь.\nД
 assert.equal(convertPlayText('Unstructured text without character names'),'Unstructured text without character names');
 assert.equal(textItemsToLines([]),'');
 console.log('PDF formatting checks passed: layout, split words, character headings, separators, page numbers, directions, Cyrillic, and unstructured text.');
+const {splitPlayScenes,preparePlayText}=require('../dist/pdf-import.js');
+const wholePlay='Название пьесы\nАвтор\n'+Array.from({length:25},(_,i)=>`Сцена ${i+1}\nЕЛЕНА: Реплика ${i+1}.\nДЖЕЙМС: Ответ ${i+1}.`).join('\n\n');
+const split=splitPlayScenes(wholePlay);assert.equal(split.scenes.length,25);assert.equal(split.preamble,'Название пьесы\nАвтор');assert.equal(split.scenes[20].title,'Сцена 21');assert.equal(parseScript(split.scenes[24].script)[1].text,'Ответ 25.');
+const prepared=preparePlayText(wholePlay);assert.equal(splitPlayScenes(prepared).scenes.length,25);assert(!prepared.includes('Автор'));
+for(const heading of ['СЦЕНА 22. Поздний вечер','Сцена № 23','сцена 24 — Возвращение','Сцена (25)','Scene 26','SCENE XXVII','Сцена\u00a028'])assert.equal(splitPlayScenes(heading+'\nЕЛЕНА: Привет.').scenes.length,1,heading);
+assert.equal(splitPlayScenes('ЕЛЕНА: Вспомни, как началась Сцена 1.\n(Сцена 2 — не заголовок)').scenes.length,0);
+assert.equal(splitPlayScenes('Сцена 1\nЕЛЕНА: Да.\nАКТ 2\nСцена 1\nЕЛЕНА: Нет.').scenes.length,2,'Numbering can restart in another act');
+assert.equal(splitPlayScenes('Сцена 1\nЕЛЕНА: Да.\nСцена 2').scenes[1].script,'','Empty scenes remain visible for validation');
+assert.deepEqual(parseScript(convertPlayText('СЦЕНА 1\nЕЛЕНА\nПривет.\nДЖЕЙМС\nДобрый день.')).map(l=>l.speaker),['ЕЛЕНА','ДЖЕЙМС']);
+console.log('Whole-play splitting passed: 25 scenes, heading variants, scene isolation, repeated numbering, empty scenes, and Cyrillic headings.');

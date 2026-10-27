@@ -7,8 +7,8 @@ Published privately at https://cue-rehearsal-elenablinova.leena-blinova.chatgpt.
 ## Use
 
 1. In Safari, open the app and choose Share → Add to Home Screen.
-2. Open My script. Upload a PDF and choose a page range (up to 100 pages per import, 25 MB per file), or paste `CHARACTER: dialogue` speeches / import a UTF-8 `.txt` file. Review PDF-extracted dialogue and character names before saving. Scanned PDFs require OCR in a PDF app first. Stage directions use `[brackets]`.
-3. Save and select your character. Choose the script language under Rehearsal settings.
+2. Open My script. Upload the whole PDF (25 MB per file; all pages are selected by default), or paste `CHARACTER: dialogue` speeches / import a UTF-8 `.txt` file. Review PDF-extracted dialogue and character names before saving. Scanned PDFs require OCR in a PDF app first. Stage directions use `[brackets]`.
+3. The play splits at numbered headings such as `Сцена 1`, `СЦЕНА 22`, or `Scene 1`. Review the full draft and save. Use the scene picker to choose any scene; each scene remembers its own progress. Select your character. Choose the script language under Rehearsal settings.
 4. Start rehearsal. Other characters are read aloud. Tap the microphone on each of your turns and say the entire line.
 5. Only a matching final transcript advances. Incorrect, partial, extra, or missing words keep the current line. Punctuation, capitalization, and apostrophes are ignored. Typed practice follows the same rule.
 
@@ -30,4 +30,4 @@ npm test
 
 The integration checks simulate browser speech events and verify wrong/interim/correct transcripts, typed checks, spoken cue progression, cancellation, and stale callbacks. Physical iPhone microphone, permission, install, and offline checks remain manual.
 
-PDF importer checks cover positioned text reconstruction, character headings, common dialogue separators, stage directions, Cyrillic, and text without character names. Real two-page PDF extraction and no-text PDF detection were also verified with the vendored PDF.js build. iPhone file picker and Safari extraction still need physical-device verification.
+PDF importer checks cover positioned text reconstruction, character headings, common dialogue separators, stage directions, Cyrillic, and text without character names. Real two-page PDF extraction, no-text PDF detection, and a 25-page Cyrillic play containing 25 scenes were also verified with the vendored PDF.js build. Scene checks cover 25+ scene selection, independent progress, reload, full-play editing/export, heading variants, repeated numbering across acts, and validation of empty scenes. iPhone file picker and Safari extraction still need physical-device verification.

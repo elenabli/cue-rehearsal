@@ -16,7 +16,7 @@
       return text.trim();
     }).filter(Boolean).join('\n');
   }
-  function isHeading(s){return /^(?:(?:ACT|SCENE|PART|CHAPTER|PAGE|АКТ|СЦЕНА|ДЕЙСТВИЕ|КАРТИНА)\b.*|[IVXLCDM]+\.?|\d+[.\s]*|DRAMATIS PERSONAE|CHARACTERS|CAST(?: OF CHARACTERS)?|THE END|CURTAIN|FINIS)$/iu.test(s);}
+  function isHeading(s){return /^(?:(?:ACT|SCENE|PART|CHAPTER|PAGE|АКТ|СЦЕНА|ДЕЙСТВИЕ|КАРТИНА)(?=\s|[.:№]|$).*|[IVXLCDM]+\.?|\d+[.\s]*|DRAMATIS PERSONAE|CHARACTERS|CAST(?: OF CHARACTERS)?|THE END|CURTAIN|FINIS)$/iu.test(s);}
   function standaloneName(s){return s.length<=45&&/\p{L}/u.test(s)&&s===s.toLocaleUpperCase()&&!/[\[\]():!?;“”"0-9]/u.test(s)&&s.split(/\s+/).length<=4&&!isHeading(s);}
   function convertPlayText(text){
     const rows=text.replace(/\r/g,'').split('\n').map(s=>s.trim()).filter(Boolean);
@@ -32,5 +32,22 @@
     }
     return out.length?out.join('\n'):text;
   }
-  const api={textItemsToLines,convertPlayText};root.CuePdf=api;if(typeof module!=='undefined')module.exports=api;
+  // Only headings at the beginning of a line delimit scenes. Numbering may
+  // restart in a later act; each occurrence remains a separate scene.
+  function splitPlayScenes(text){
+    const rows=text.replace(/\r/g,'').split('\n');const scenes=[];const preamble=[];let current=null;
+    const heading=/^\s*((?:сцена|scene)\s*(?:№\s*|no\.?\s*)?(?:\(\s*)?(?:\d+|[IVXLCDM]+)(?:\s*\))?(?=$|[\s.:—–-]).*)$/iu;
+    for(const row of rows){
+      const match=row.replace(/\u00a0/g,' ').match(heading);
+      if(match){current={title:match[1].trim(),script:''};scenes.push(current);}
+      else if(current)current.script+=(current.script?'\n':'')+row;
+      else preamble.push(row);
+    }
+    return {preamble:preamble.join('\n').trim(),scenes:scenes.map(scene=>({...scene,script:scene.script.trim()}))};
+  }
+  function preparePlayText(text){
+    const {scenes}=splitPlayScenes(text);
+    return scenes.length?scenes.map(scene=>scene.title+'\n'+convertPlayText(scene.script)).join('\n\n'):convertPlayText(text);
+  }
+  const api={textItemsToLines,convertPlayText,splitPlayScenes,preparePlayText};root.CuePdf=api;if(typeof module!=='undefined')module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

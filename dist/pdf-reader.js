@@ -12,23 +12,22 @@
    status('Opening your PDF…');const lib=await import('./vendor/pdfjs/pdf.mjs');lib.GlobalWorkerOptions.workerSrc=new URL('./vendor/pdfjs/pdf.worker.mjs',document.baseURI).href;
    const bytes=new Uint8Array(await file.arrayBuffer());if(!new TextDecoder().decode(bytes.slice(0,1024)).includes('%PDF-'))throw Error('This file does not appear to be a PDF. Choose another file.');
    loading=lib.getDocument({data:bytes,cMapUrl:new URL('./vendor/pdfjs/cmaps/',document.baseURI).href,cMapPacked:true,standardFontDataUrl:new URL('./vendor/pdfjs/standard_fonts/',document.baseURI).href,wasmUrl:new URL('./vendor/pdfjs/wasm/',document.baseURI).href,isEvalSupported:false});
-   pdf=await loading.promise;if(token!==generation)return;pdfName=file.name.replace(/\.pdf$/i,'');byId('pdf-from').value=1;byId('pdf-to').value=Math.min(pdf.numPages,100);byId('pdf-from').max=pdf.numPages;byId('pdf-to').max=pdf.numPages;
+   pdf=await loading.promise;if(token!==generation)return;pdfName=file.name.replace(/\.pdf$/i,'');byId('pdf-from').value=1;byId('pdf-to').value=pdf.numPages;byId('pdf-from').max=pdf.numPages;byId('pdf-to').max=pdf.numPages;
    byId('pdf-page-count').textContent=`${file.name} · ${pdf.numPages} page${pdf.numPages===1?'':'s'}`;byId('pdf-pages').hidden=false;
-   status('Choose the pages containing your scene, then extract. For longer plays, import up to 100 pages at a time.');
+   status('The whole play is selected. Extract it to split automatically at headings such as «Сцена 1». You can also choose a page range.');
   }catch(error){await dispose();status(error.name==='PasswordException'?'This PDF is password-protected. Unlock it in your PDF app and save an unprotected copy to import.':error.message||'Couldn’t open the PDF. Try another file.',true);}
   finally{busy=false;controls();}
  };
  byId('pdf-extract').onclick=async()=>{
   if(!pdf||busy)return;const from=Number(byId('pdf-from').value),to=Number(byId('pdf-to').value);
   if(!Number.isInteger(from)||!Number.isInteger(to)||from<1||to<from||to>pdf.numPages){status(`Choose a valid page range between 1 and ${pdf.numPages}.`,true);return;}
-  if(to-from+1>100){status('Import up to 100 pages at a time. Choose the scene you want to rehearse.',true);return;}
   busy=true;controls();let emptyPages=0;const pages=[];
   try{
    for(let p=from;p<=to;p++){status(`Reading page ${p} of ${to}…`);const page=await pdf.getPage(p);const content=await page.getTextContent();const text=CuePdf.textItemsToLines(content.items);if(!text.trim())emptyPages++;pages.push(text);page.cleanup();}
    const text=pages.join('\n');if(!text.trim())throw Error('No selectable text was found. This looks like a scanned PDF. Run text recognition (OCR) in your PDF app, save it as a searchable PDF, and try again. Your current script has been kept.');
-   const converted=CuePdf.convertPlayText(text);byId('script-input').value=converted;byId('title-input').value=pdfName;byId('script-message').textContent='';
-   let names=[];try{names=[...new Set(CueCore.parseScript(converted).map(l=>l.speaker))];}catch{}
-   byId('pdf-review').hidden=false;byId('pdf-review').textContent=names.length?`Detected characters: ${names.join(', ')}. Review names, dialogue, and stage directions below; PDF layouts can change reading order. Remove any title or heading mistaken for a character. Then choose Save & rehearse.`:'Text extracted. Add NAME: before each speech below, remove any front matter, then choose Save & rehearse.';
+   const converted=CuePdf.preparePlayText(text);byId('script-input').value=converted;byId('title-input').value=pdfName;byId('script-message').textContent='';
+   const sceneCount=CuePdf.splitPlayScenes(converted).scenes.length;
+   byId('pdf-review').hidden=false;byId('pdf-review').textContent=sceneCount?`Found ${sceneCount} scenes. Review the scene headings, character names, and dialogue below, then choose Save play & rehearse. Each scene will be available in the scene picker.`:'No numbered scene headings were found. You can add headings such as «Сцена 1» above each scene, or save this as a single scene. Review the character names and dialogue before saving.';
    status(`Extracted ${to-from+1} page${to===from?'':'s'}.${emptyPages?` ${emptyPages} page(s) had no text and were omitted; review the PDF for missing dialogue.`:''} Review the draft below before saving.`);
   }catch(error){status(error.message||'Couldn’t extract this PDF. Your current script has been kept. Try another file.',true);}
   finally{busy=false;controls();}

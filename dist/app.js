@@ -8,17 +8,26 @@ JAMES: I'd ask you to say it again.
 ELENA: I'm staying. This time, I'm staying.`};
 let data={...demo,role:'ELENA',index:0,hide:false,pace:'1',language:'en-GB',voice:''};let storageFailed=false;
 try{const saved=JSON.parse(localStorage.getItem('cue-v1'));if(saved&&typeof saved.script==='string')Object.assign(data,saved);}catch{storageFailed=true;}
-let lines;try{lines=CueCore.parseScript(data.script);if(!lines.length)throw Error();}catch{data={...data,...demo,index:0,role:'ELENA'};lines=CueCore.parseScript(demo.script);}
-let roles=[...new Set(lines.map(l=>l.speaker))];if(!roles.includes(data.role))data.role=roles[0];data.index=Math.max(0,Math.min(Number(data.index)||0,lines.length));
+// Migrate the original single-scene save without losing its current line.
+if(!Array.isArray(data.scenes)||!data.scenes.length||data.scenes.some(scene=>typeof scene.script!=='string')){
+ data.scenes=[{title:'Practice scene',script:data.script,index:data.index||0}];data.activeScene=0;
+}
+data.activeScene=Math.max(0,Math.min(Number(data.activeScene)||0,data.scenes.length-1));
+data.script=data.scenes[data.activeScene].script;data.index=data.scenes[data.activeScene].index||0;
+data.playText=typeof data.playText==='string'?data.playText:(data.scenes.length===1?data.script:data.scenes.map(scene=>scene.title+'\n'+scene.script).join('\n\n'));
+function playRoles(){const names=[];for(const scene of data.scenes){try{for(const line of CueCore.parseScript(scene.script))if(!names.includes(line.speaker))names.push(line.speaker);}catch{}}return names;}
+let lines;try{lines=CueCore.parseScript(data.script);if(!lines.length)throw Error();}catch{data={...data,...demo,index:0,role:'ELENA'};lines=CueCore.parseScript(demo.script);data.scenes=[{title:'Practice scene',script:demo.script,index:0}];data.activeScene=0;data.playText=demo.script;}
+let roles=playRoles();if(!roles.includes(data.role))data.role=roles[0];data.index=Math.max(0,Math.min(Number(data.index)||0,lines.length));
 let running=false,recognition=null,speaking=false,runId=0,advanceTimer=null,voices=[];
 const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
-function persist(){try{localStorage.setItem('cue-v1',JSON.stringify(data));}catch{storageFailed=true;$('storage-notice').textContent='Browser storage is unavailable. Export your script to keep a copy.';}}
+function persist(){if(data.scenes?.[data.activeScene])data.scenes[data.activeScene].index=data.index;try{localStorage.setItem('cue-v1',JSON.stringify(data));}catch{storageFailed=true;$('storage-notice').textContent='Browser storage is unavailable. Export your script to keep a copy.';}}
 function feedback(message='',error=false){$('feedback').textContent=message;$('feedback').classList.toggle('error',error);}
 function stopAudio(){runId++;clearTimeout(advanceTimer);if(recognition){const old=recognition;recognition=null;old.onend=null;old.onresult=null;old.onerror=null;old.abort();}window.speechSynthesis?.cancel();speaking=false;document.body.classList.remove('listening');}
 function pause(){running=false;stopAudio();render();}
-function showView(name){pause();document.querySelectorAll('.view').forEach(el=>el.hidden=el.id!==name);document.querySelectorAll('.nav').forEach(el=>el.classList.toggle('active',el.dataset.view===name));$('crumb').textContent={rehearse:'Rehearse',script:'My script',settings:'Settings'}[name];if(name==='script'){$('title-input').value=data.title;$('script-input').value=data.script;}window.scrollTo({top:0,behavior:'smooth'});}
+function showView(name){pause();document.querySelectorAll('.view').forEach(el=>el.hidden=el.id!==name);document.querySelectorAll('.nav').forEach(el=>el.classList.toggle('active',el.dataset.view===name));$('crumb').textContent={rehearse:'Rehearse',script:'My script',settings:'Settings'}[name];window.scrollTo({top:0,behavior:'smooth'});}
 function render(){const line=lines[data.index],mine=line?.speaker===data.role,complete=!line;
- $('play-title').textContent=data.title;$('line-count').textContent=complete?'SCENE COMPLETE':`${data.index+1} / ${lines.length}`;
+ $('play-title').textContent=data.title;$('scene-subtitle').textContent=`${data.scenes[data.activeScene].title} · ${data.activeScene+1} of ${data.scenes.length}`;
+ $('scene-picker-wrap').hidden=data.scenes.length<2;$('scene-picker').replaceChildren(...data.scenes.map((scene,i)=>{const o=document.createElement('option');o.value=String(i);o.textContent=scene.title;return o;}));$('scene-picker').value=String(data.activeScene);$('scene-summary').textContent=`${data.scenes.length} scenes in your play · Progress is saved for each scene`;$('line-count').textContent=complete?'SCENE COMPLETE':`${data.index+1} / ${lines.length}`;
  $('speaker').textContent=complete?'TAKE A BOW':`${line.speaker}${mine?' · YOU':''}`;
  $('current-line').textContent=complete?'A little more yours, every time.':line.text;
  $('current-line').hidden=!!(mine&&data.hide);$('hidden-line').hidden=!(mine&&data.hide);$('stage-direction').textContent=line?.direction||'';
@@ -57,10 +66,18 @@ $('voice').onchange=e=>{data.voice=e.target.value;persist();};$('test-voice').on
 window.speechSynthesis?.addEventListener('voiceschanged',populateVoices);populateVoices();
 for(const el of document.querySelectorAll('[data-view]'))el.onclick=()=>showView(el.dataset.view);
 for(const id of ['edit-script','scene-edit','full-script'])$(id).onclick=()=>showView('script');
-$('save-script').onclick=()=>{try{const parsed=CueCore.parseScript($('script-input').value);if(parsed.length<2)throw Error('Add at least two speeches, each starting with NAME: dialogue.');const speakers=[...new Set(parsed.map(l=>l.speaker))];if(speakers.length<2)throw Error('Add at least two characters so your scene partner can read your cues.');pause();data.title=$('title-input').value.trim()||'Untitled scene';data.script=$('script-input').value;lines=parsed;roles=speakers;if(!roles.includes(data.role))data.role=roles[0];data.index=0;$('script-message').textContent='';feedback();render();showView('rehearse');}catch(e){$('script-message').textContent=e.message;}};
+$('save-script').onclick=()=>{try{
+ const fullText=$('script-input').value;const split=CuePdf.splitPlayScenes(fullText);
+ const nextScenes=split.scenes.length?split.scenes:[{title:'Practice scene',script:fullText}];
+ for(const scene of nextScenes){let parsed;try{parsed=CueCore.parseScript(scene.script);}catch{throw Error(`${scene.title}: start each speech with NAME: dialogue.`);}if(!parsed.length)throw Error(`${scene.title} has no dialogue. Add the speeches or remove this heading before saving.`);}
+ pause();data.title=$('title-input').value.trim()||'Untitled play';data.playText=fullText;data.scenes=nextScenes.map(scene=>({...scene,index:0}));data.activeScene=0;data.script=data.scenes[0].script;data.index=0;lines=CueCore.parseScript(data.script);roles=playRoles();if(!roles.includes(data.role))data.role=roles[0];
+ $('script-message').textContent='';feedback();render();showView('rehearse');
+ }catch(e){$('script-message').textContent=e.message;}};
+$('scene-picker').onchange=e=>{const next=Number(e.target.value);if(!Number.isInteger(next)||!data.scenes[next]||next===data.activeScene)return;pause();data.activeScene=next;data.script=data.scenes[next].script;lines=CueCore.parseScript(data.script);data.index=Math.max(0,Math.min(data.scenes[next].index||0,lines.length));feedback();$('typed').value='';render();};
 $('file-input').onchange=async e=>{const file=e.target.files[0];if(!file)return;if(file.size>500000){$('script-message').textContent='Please use a text file smaller than 500 KB.';return;}$('script-input').value=await file.text();if(!$('title-input').value.trim())$('title-input').value=file.name.replace(/\.txt$/i,'');e.target.value='';};
 $('export-script').onclick=()=>{const blob=new Blob([$('script-input').value],{type:'text/plain;charset=utf-8'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=($('title-input').value||'scene')+'.txt';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
 function openHelp(){pause();$('help').showModal();}document.querySelectorAll('.install-help,.help-button').forEach(el=>el.onclick=openHelp);document.querySelectorAll('.dialog-close,.dialog-done').forEach(el=>el.onclick=()=>$('help').close());
 document.addEventListener('visibilitychange',()=>{if(document.hidden)pause();});window.addEventListener('pagehide',pause);
+$('title-input').value=data.title;$('script-input').value=data.playText;
 if(storageFailed)$('storage-notice').textContent='Browser storage is unavailable. Export your script to keep a copy.';
 render();if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
