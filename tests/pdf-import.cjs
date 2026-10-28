@@ -4,7 +4,7 @@ const {parseScript}=require('../dist/core.js');
 const item=(str,x,y,width)=>({str,transform:[12,0,0,12,x,y],width,height:12});
 assert.equal(textItemsToLines([item('world.',80,600,35),item('ELENA:',30,700,40),item('Hello',40,600,30)]),'ELENA:\nHello world.');
 assert.equal(textItemsToLines([item('stay',30,700,20),item('ing',50,700,15)]),'staying');
-const input='ACT I\nSCENE 2\nELENA\n(quietly)\nI thought you might still be here.\nJAMES\nWe have a little time.\n2\nELENA\nThen let us stay.\nCURTAIN';
+const input='ACT I\nSCENE 2\nELENA\n(quietly)\nI thought you might still be here.\nJAMES\nWe have a little time.\nPAGE 2\nELENA\nThen let us stay.\nCURTAIN';
 const parsed=parseScript(convertPlayText(input));
 assert.deepEqual(parsed,[{speaker:'ELENA',text:'I thought you might still be here.',direction:'[quietly]'},{speaker:'JAMES',text:'We have a little time.',direction:''},{speaker:'ELENA',text:'Then let us stay.',direction:''}]);
 for(const separator of [': ','. ',' — ',' – '])assert.equal(parseScript(convertPlayText(`ELENA${separator}Hello.\nJAMES${separator}Goodbye.`)).length,2);
@@ -57,3 +57,13 @@ assert.equal(parseScript('ЛЕХА: Я здесь.',['Лёха'])[0].speaker,'Л
 assert.equal(parseScript('СЕРГЕЙ: Да.\nне надо, я как все. а она: Нет.')[0].speaker,'СЕРГЕЙ');assert.equal(parseScript('СЕРГЕЙ: Да.\nне надо, я как все. а она: Нет.').length,1);
 console.log('Cast checks passed: front-matter roster, descriptions, patronymics, aliases, ё/е, preserved roster, and dialogue colons excluded from roles.');
 assert.deepEqual(extractCast('Название Пьесы\nСергей — отец\nСветлана — жена\nСцена 1\nСЕРГЕЙ: Да.\nСВЕТЛАНА: Нет.'),['Сергей','Светлана'],'A roster before the scenes can be found without a section heading');
+// Margin pagination is discarded before dialogue/scene conversion.
+const box=[0,0,600,800];
+assert.equal(textItemsToLines([item('СВЕТЛАНА: Никакой водки!',40,400,230),item('35./59.',280,25,45)],{},box),'СВЕТЛАНА: Никакой водки!');
+for(const footer of ['35','35 / 59','35./59.','Стр. 35 из 59','Page 35 of 59','— 35 —','iv'])assert.equal(textItemsToLines([item(footer,280,25,60)],{},box),'',footer);
+assert.equal(textItemsToLines([item('35',280,780,30)],{},box),'','Header page numbers are excluded');
+for(const spoken of ['35','2/3','СЕРГЕЙ: Мне 35 лет.','СЕРГЕЙ: Возьми 35/59 от суммы.'])assert.equal(textItemsToLines([item(spoken,40,400,200)],{},box),spoken,'Numbers in the body are preserved');
+const {cleanPaginationText}=require('../dist/core.js');assert.equal(cleanPaginationText('СВЕТЛАНА: Никакой водки! 35./59.'),'СВЕТЛАНА: Никакой водки!');assert.equal(parseScript('СВЕТЛАНА: Никакой водки!\n[Стук в дверь.]\n35./59.')[0].text,'Никакой водки!');
+assert.equal(cleanPaginationText('СЕРГЕЙ: Мне 35 лет.\n1/2'),'СЕРГЕЙ: Мне 35 лет.\n1/2','A lone ambiguous fraction is not deleted from an older script');assert.equal(parseScript('СЕРГЕЙ:\n35')[0].text,'35');
+assert.equal(cleanPaginationText('Сцена 1\nСЕРГЕЙ: Да.\n35/59\nСцена 2\nСЕРГЕЙ: Нет.\n36/59'),'Сцена 1\nСЕРГЕЙ: Да.\nСцена 2\nСЕРГЕЙ: Нет.');
+console.log('Pagination checks passed: margin row formats, header/footer numbers, genuine dialogue numbers/fractions, and legacy page markers.');

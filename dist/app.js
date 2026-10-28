@@ -15,6 +15,12 @@ if(!Array.isArray(data.scenes)||!data.scenes.length||data.scenes.some(scene=>typ
 data.activeScene=Math.max(0,Math.min(Number(data.activeScene)||0,data.scenes.length-1));
 data.script=data.scenes[data.activeScene].script;data.index=data.scenes[data.activeScene].index||0;
 data.playText=typeof data.playText==='string'?data.playText:(data.scenes.length===1?data.script:data.scenes.map(scene=>scene.title+'\n'+scene.script).join('\n\n'));
+// Older imports retained isolated footer rows. Repair them using the full
+// document's repeated page totals; keep active scene, role, and line progress.
+const paginationTotals=CueCore.paginationTotals(data.playText);
+data.playText=CueCore.cleanPaginationText(data.playText,paginationTotals);
+for(const scene of data.scenes)scene.script=CueCore.cleanPaginationText(scene.script,paginationTotals);
+data.script=data.scenes[data.activeScene].script;
 data.cast=Array.isArray(data.cast)&&data.cast.length?data.cast:CuePdf.extractCast(data.playText);
 function inferLanguage(text){if(data.languageManual)return;const ru=(text.match(/[а-яё]/gi)||[]).length,latin=(text.match(/[a-z]/gi)||[]).length;const language=ru>latin?'ru-RU':latin>ru?'en-GB':data.language;if(language!==data.language){data.language=language;data.voice='';}}
 inferLanguage(data.playText);
@@ -90,7 +96,7 @@ for(const el of document.querySelectorAll('[data-view]'))el.onclick=()=>showView
 for(const id of ['edit-script','full-script'])$(id).onclick=()=>showView('script');
 $('scene-edit').onclick=()=>{showView('script');const editor=$('script-input');let cursor=0,start=-1;for(let i=0;i<=data.activeScene;i++){start=editor.value.indexOf(data.scenes[i].title,cursor);if(start<0)break;cursor=start+data.scenes[i].title.length;}editor.focus?.();if(start>=0)editor.setSelectionRange?.(start,cursor);};
 $('save-script').onclick=()=>{try{
- const fullText=$('script-input').value;if(!fullText.trim())throw Error('Add a script or upload a PDF before saving.');const split=CuePdf.splitPlayScenes(fullText);
+ const fullText=CueCore.cleanPaginationText($('script-input').value);if(!fullText.trim())throw Error('Add a script or upload a PDF before saving.');const split=CuePdf.splitPlayScenes(fullText);
  const nextScenes=split.scenes.length?split.scenes:[{title:'Practice scene',script:fullText}];const cast=$('cast-input').value.split(/\r?\n/).map(name=>name.trim()).filter(Boolean);if(!cast.length)cast.push(...CuePdf.extractCast(fullText));
  const validated=nextScenes.map(scene=>{
   if(!scene.script.trim())return {...scene,index:0,kind:'review'};

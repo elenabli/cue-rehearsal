@@ -1,6 +1,6 @@
 /* Layout and play-format helpers, shared by the importer and tests. */
 (function(root){
-  function textItemsToLines(items,styles={}){
+  function textItemsToLines(items,styles={},pageBox=null){
     const rows=[];
     for(const item of items){
       if(typeof item.str!=='string'||!item.str.trim())continue;
@@ -15,6 +15,13 @@
     return rows.sort((a,b)=>b.y-a.y).map(row=>{
       const ordered=row.items.sort((a,b)=>a.x-b.x);let plain='',end=null;const runs=[];
       for(const item of ordered){const gap=end!==null&&item.x-end>1&&!plain.endsWith(' ')&&!item.text.startsWith(' ')?' ':'';const text=gap+item.text;plain+=text;const last=runs[runs.length-1];if(last&&last.italic===item.italic)last.text+=text;else runs.push({italic:item.italic,text});end=item.x+item.width;}
+      // Remove only isolated number-like rows in the page margins. Numeric
+      // dialogue in the body (including fractions) must remain spoken text.
+      const rowText=plain.trim();
+      if(pageBox&&pageBox.length===4){const height=pageBox[3]-pageBox[1];const margin=row.y<=pageBox[1]+height*.08||row.y>=pageBox[3]-height*.08;
+        const numbered=/^(?:(?:стр(?:аница)?\.?|page)\s*)?(?:[—–-]\s*)?(?:\d{1,4}|[IVXLCDM]+)[.\s]*(?:(?:[/／]|из|of)[.\s]*\d{1,4}[.\s]*)?(?:[—–-])?$/iu.test(rowText);
+        if(margin&&numbered)return '';
+      }
       // Scene headings must remain searchable even when typeset in italics.
       if(isHeading(plain.trim()))return plain.trim();
       return runs.map(run=>run.italic&&run.text.trim()?' ['+run.text.trim().replace(/\[/g,'(').replace(/\]/g,')')+'] ':run.text).join('').replace(/[ \t]+/g,' ').trim();
@@ -43,9 +50,9 @@
     for(const name of new Set(content.items.map(item=>item.fontName).filter(Boolean))){
       if(page.commonObjs.has(name)){const font=page.commonObjs.get(name);styles[name]={...styles[name],fontName:font.name||'',italic:fontIsItalic(font)||styles[name]?.italic===true};}
     }
-    return textItemsToLines(content.items,styles);
+    return textItemsToLines(content.items,styles,page.view);
   }
-  function isHeading(s){return /^(?:(?:ACT|SCENE|PART|CHAPTER|PAGE|АКТ|СЦЕНА|ДЕЙСТВИЕ|КАРТИНА)(?=\s|[.:№]|$).*|[IVXLCDM]+\.?|\d+[.\s]*|DRAMATIS PERSONAE|CHARACTERS|CAST(?: OF CHARACTERS)?|THE END|CURTAIN|FINIS)$/iu.test(s);}
+  function isHeading(s){return /^(?:(?:ACT|SCENE|PART|CHAPTER|PAGE|АКТ|СЦЕНА|ДЕЙСТВИЕ|КАРТИНА)(?=\s|[.:№]|$).*|[IVXLCDM]+\.?|DRAMATIS PERSONAE|CHARACTERS|CAST(?: OF CHARACTERS)?|THE END|CURTAIN|FINIS)$/iu.test(s);}
   function standaloneName(s){return s.length<=45&&/\p{L}/u.test(s)&&s===s.toLocaleUpperCase()&&!/[\[\]():!?;“”"0-9]/u.test(s)&&s.split(/\s+/).length<=4&&!isHeading(s);}
   function extractCast(text){
     const preamble=splitPlayScenes(text).preamble||(!splitPlayScenes(text).scenes.length?text:'');
