@@ -2,7 +2,7 @@
 (function(){
  const byId=id=>document.getElementById(id);let loading=null,pdf=null,pdfName='',generation=0,busy=false;
  const status=(message,error=false)=>{byId('pdf-status').textContent=message;byId('pdf-status').classList.toggle('import-error',error);};
- const controls=()=>{byId('pdf-extract').disabled=busy||!pdf;byId('pdf-file').disabled=busy;byId('pdf-from').disabled=busy;byId('pdf-to').disabled=busy;byId('save-script').disabled=busy;byId('file-input').disabled=busy;byId('script-input').readOnly=busy;byId('pdf-panel').setAttribute('aria-busy',String(busy));};
+ const controls=()=>{byId('pdf-extract').disabled=busy||!pdf;byId('pdf-file').disabled=busy;byId('pdf-from').disabled=busy;byId('pdf-to').disabled=busy;byId('save-script').disabled=busy;byId('file-input').disabled=busy;byId('script-input').readOnly=busy;byId('cast-input').readOnly=busy;byId('pdf-panel').setAttribute('aria-busy',String(busy));};
  const dispose=async()=>{pdf=null;if(loading){await loading.destroy().catch(()=>{});loading=null;}};
  byId('pdf-file').onchange=async e=>{
   const file=e.target.files[0];e.target.value='';if(!file)return;const token=++generation;busy=true;controls();byId('pdf-pages').hidden=true;byId('pdf-review').hidden=true;
@@ -25,7 +25,7 @@
   try{
    for(let p=from;p<=to;p++){status(`Reading page ${p} of ${to}…`);const page=await pdf.getPage(p);const text=await CuePdf.extractPageText(page);if(!text.trim())emptyPages++;pages.push(text);page.cleanup();}
    const text=pages.join('\n');if(!text.trim())throw Error('No selectable text was found. This looks like a scanned PDF. Run text recognition (OCR) in your PDF app, save it as a searchable PDF, and try again. Your current script has been kept.');
-   const converted=CuePdf.preparePlayText(text);byId('script-input').value=converted;byId('title-input').value=pdfName;byId('script-message').textContent='';
+   const converted=CuePdf.preparePlayText(text);byId('script-input').value=converted;byId('cast-input').value=CuePdf.extractCast(converted).join('\n');byId('title-input').value=pdfName;byId('script-message').textContent='';
    const sceneCount=CuePdf.splitPlayScenes(converted).scenes.length;
    byId('pdf-review').hidden=false;byId('pdf-review').textContent=sceneCount?`Found ${sceneCount} scenes. Курсив сохранён как ремарки в [скобках]. Review the scene headings, character names, and dialogue below, then choose Save play & rehearse. Each scene will be available in the scene picker.`:'No numbered scene headings were found. You can add headings such as «Сцена 1» above each scene, or save this as a single scene. Review the character names and dialogue before saving.';
    status(`Extracted ${to-from+1} page${to===from?'':'s'}.${emptyPages?` ${emptyPages} page(s) had no text and were omitted; review the PDF for missing dialogue.`:''} Review the draft below before saving.`);

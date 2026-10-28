@@ -34,3 +34,26 @@ console.log('Italic-span checks passed: mixed and wrapped text, separate stage d
 const {fontIsItalic}=require('../dist/pdf-import.js');
 const fontData=new Uint8Array(100),fontView=new DataView(fontData.buffer);fontView.setUint16(4,1);fontView.setUint32(12,0x706f7374);fontView.setUint32(20,32);fontView.setUint32(24,32);fontView.setInt32(36,-12*65536);
 assert.equal(fontIsItalic({name:'ABCDEF+F1',data:fontData}),true,'An opaque subset name still exposes its italic angle');fontView.setInt32(36,0);assert.equal(fontIsItalic({name:'ABCDEF+F1',data:fontData}),false);assert.equal(fontIsItalic({cssFontInfo:{italicAngle:'12'}}),true);assert.equal(fontIsItalic({italic:true}),true);
+const {extractCast}=require('../dist/pdf-import.js');
+const rosterPlay=`Название пьесы
+ДЕЙСТВУЮЩИЕ ЛИЦА:
+Сергей — отец
+Светлана, его жена
+Тамара Петровна — соседка
+Лёха (друг)
+СЦЕНА 1
+СЕРГЕЙ: Не хочу.
+Причина гибели: неизвестна.
+Надо к врачу: завтра.
+СВЕТЛАНА: Подожди.
+очереди, а кассирша: не пускает.
+ТАМАРА ПЕТРОВНА. Здравствуйте.
+ЛЁХА
+Привет.`;
+const cast=extractCast(rosterPlay);assert.deepEqual(cast,['Сергей','Светлана','Тамара Петровна','Лёха']);
+const convertedRoster=preparePlayText(rosterPlay);assert.deepEqual(extractCast(convertedRoster),cast,'Roster survives PDF conversion');
+const castLines=parseScript(splitPlayScenes(convertedRoster).scenes[0].script,cast);assert.deepEqual([...new Set(castLines.map(l=>l.speaker))],cast);assert(castLines[0].text.includes('Причина гибели: неизвестна.'));assert(castLines[1].text.includes('очереди, а кассирша: не пускает.'));
+assert.equal(parseScript('ЛЕХА: Я здесь.',['Лёха'])[0].speaker,'Лёха');assert.equal(parseScript('СЕРГЕЙ: Да.',['Сергей Гордеев'])[0].speaker,'Сергей Гордеев');
+assert.equal(parseScript('СЕРГЕЙ: Да.\nне надо, я как все. а она: Нет.')[0].speaker,'СЕРГЕЙ');assert.equal(parseScript('СЕРГЕЙ: Да.\nне надо, я как все. а она: Нет.').length,1);
+console.log('Cast checks passed: front-matter roster, descriptions, patronymics, aliases, ё/е, preserved roster, and dialogue colons excluded from roles.');
+assert.deepEqual(extractCast('Название Пьесы\nСергей — отец\nСветлана — жена\nСцена 1\nСЕРГЕЙ: Да.\nСВЕТЛАНА: Нет.'),['Сергей','Светлана'],'A roster before the scenes can be found without a section heading');

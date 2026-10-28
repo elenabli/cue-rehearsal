@@ -47,7 +47,36 @@
   }
   function isHeading(s){return /^(?:(?:ACT|SCENE|PART|CHAPTER|PAGE|АКТ|СЦЕНА|ДЕЙСТВИЕ|КАРТИНА)(?=\s|[.:№]|$).*|[IVXLCDM]+\.?|\d+[.\s]*|DRAMATIS PERSONAE|CHARACTERS|CAST(?: OF CHARACTERS)?|THE END|CURTAIN|FINIS)$/iu.test(s);}
   function standaloneName(s){return s.length<=45&&/\p{L}/u.test(s)&&s===s.toLocaleUpperCase()&&!/[\[\]():!?;“”"0-9]/u.test(s)&&s.split(/\s+/).length<=4&&!isHeading(s);}
-  function convertPlayText(text){
+  function extractCast(text){
+    const preamble=splitPlayScenes(text).preamble||(!splitPlayScenes(text).scenes.length?text:'');
+    const rows=preamble.split(/\r?\n/).map(row=>row.replace(/[\[\]]/g,'').trim());let active=false;const names=[];
+    const namePattern=/^[\p{Lu}][\p{L}\p{M}'’.-]*(?:[ \t]+[\p{Lu}][\p{L}\p{M}'’.-]*){0,3}$/u;
+    for(let row of rows){if(/^(?:действующие\s+лица(?:\s+и\s+исполнители)?|персонажи|герои|список\s+персонажей|роли|в\s+ролях|dramatis\s+personae|cast(?:\s+of\s+characters)?|characters)\s*[:.]?$/iu.test(row)){active=true;continue;}if(!active)continue;
+      if(/^(?:место|время|действие|примечани|об авторе|содержание|акт|act|setting|notes)(?=\s|[.:]|$)/iu.test(row))break;
+      row=row.replace(/^(?:[•*—–-]|\d+[.)])\s*/,'');const name=row.split(/\s+[—–-]\s*|[,:(]/)[0].replace(/[:.;]+$/,'').trim();
+      if(namePattern.test(name)&&!isHeading(name)&&!names.some(n=>n.toLocaleLowerCase()===name.toLocaleLowerCase()))names.push(name);
+    }
+    if(!names.length&&!active){
+      const speechLabels=splitPlayScenes(text).scenes.flatMap(scene=>scene.script.split('\n').map(row=>row.trim().split(/[:：.]|[—–]/)[0].trim()).filter(name=>namePattern.test(name)));
+      for(let row of rows){const name=row.replace(/^(?:[•*—–-]|\d+[.)])\s*/,'').split(/\s+[—–-]\s*|[,:(]/)[0].replace(/[:.;]+$/,'').trim();if(namePattern.test(name)&&!isHeading(name)&&speechLabels.some(label=>castResolve(label,[name]))&&!names.includes(name))names.push(name);}
+    }
+    return names;
+  }
+  function convertWithCast(text,cast){
+    const out=[];let started=false;const leading=[];let directionDepth=0;
+    for(const raw of text.replace(/\r/g,'').split('\n')){const row=raw.trim();if(!row||isHeading(row))continue;
+      let label=null,rest='',aside='';if(!directionDepth){
+        const m=row.match(/^([^:\[\]]{1,60}?)(?:\s*\(([^)]*)\))?\s*(?:[:：.]\s*|[—–]\s*)(.*)$/u);
+        if(m){label=castResolve(m[1],cast);rest=m[3];aside=m[2]||'';}if(!label)label=castResolve(row.replace(/[:.]$/,''),cast);
+      }
+      if(label){if(!started)out.push(...leading);out.push(label+': '+(aside?'['+aside+'] ':'')+rest.replace(/\(([^)]*)\)/g,'[$1]'));started=true;continue;}
+      let clean='';for(const char of row){if(char==='('){directionDepth++;clean+='[';}else if(char===')'&&directionDepth){directionDepth--;clean+=']';}else clean+=char;}
+      if(started)out.push(clean);else leading.push(/^\[.*\]$/.test(clean)?clean:'['+clean+']');
+    }return started?out.join('\n'):text;
+  }
+  function castResolve(label,cast){const key=name=>name.toLocaleLowerCase().replace(/ё/g,'е').replace(/[.\s]+/g,' ').trim();const value=key(label);const exact=cast.find(name=>key(name)===value);if(exact)return exact;const short=cast.filter(name=>key(name).split(' ')[0]===value);return short.length===1?short[0]:null;}
+  function convertPlayText(text,cast=[]){
+    if(cast.length)return convertWithCast(text,cast);
     const rows=text.replace(/\r/g,'').split('\n').map(s=>s.trim()).filter(Boolean);
     const speechPattern=/^([\p{L}][\p{L}\p{M}\s'’.-]{0,44}?)(?:\s*[:：]\s*|[.\u2014\u2013]\s+)(.*)$/u;
     const candidates=new Set();
@@ -75,8 +104,8 @@
     return {preamble:preamble.join('\n').trim(),scenes:scenes.map(scene=>({...scene,script:scene.script.trim()}))};
   }
   function preparePlayText(text){
-    const {scenes}=splitPlayScenes(text);
-    return scenes.length?scenes.map(scene=>scene.title+'\n'+convertPlayText(scene.script)).join('\n\n'):convertPlayText(text);
+    const {scenes}=splitPlayScenes(text),cast=extractCast(text);const header=cast.length?'ДЕЙСТВУЮЩИЕ ЛИЦА\n'+cast.join('\n')+'\n\n':'';
+    return scenes.length?header+scenes.map(scene=>scene.title+'\n'+convertPlayText(scene.script,cast)).join('\n\n'):convertPlayText(text);
   }
-  const api={fontIsItalic,textItemsToLines,extractPageText,convertPlayText,splitPlayScenes,preparePlayText};root.CuePdf=api;if(typeof module!=='undefined')module.exports=api;
+  const api={extractCast,fontIsItalic,textItemsToLines,extractPageText,convertPlayText,splitPlayScenes,preparePlayText};root.CuePdf=api;if(typeof module!=='undefined')module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);
