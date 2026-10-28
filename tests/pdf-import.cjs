@@ -22,3 +22,15 @@ assert.equal(splitPlayScenes('Сцена 1\nЕЛЕНА: Да.\nАКТ 2\nСце�
 assert.equal(splitPlayScenes('Сцена 1\nЕЛЕНА: Да.\nСцена 2').scenes[1].script,'','Empty scenes remain visible for validation');
 assert.deepEqual(parseScript(convertPlayText('СЦЕНА 1\nЕЛЕНА\nПривет.\nДЖЕЙМС\nДобрый день.')).map(l=>l.speaker),['ЕЛЕНА','ДЖЕЙМС']);
 console.log('Whole-play splitting passed: 25 scenes, heading variants, scene isolation, repeated numbering, empty scenes, and Cyrillic headings.');
+// Preserve italic spans before converting PDF text into character dialogue.
+const regular={fontName:'regular'},italic={fontName:'italic'};
+const styles={regular:{fontFamily:'Arial'},italic:{fontFamily:'Arial-Italic',italic:true}};
+const italicItems=[{...item('СЕРГЕЙ: Не хочу. Пойду уже.',30,700,200),...regular},{...item('Светлана нервно на',235,700,160),...italic},{...item('него смотрит.',30,680,110),...italic},{...item('СВЕТЛАНА: Подожди.',30,650,160),...regular}];
+const italicScript=convertPlayText(textItemsToLines(italicItems,styles));const italicLines=parseScript(italicScript);assert.equal(italicLines[0].text,'Не хочу. Пойду уже.');assert(italicLines[0].direction.includes('Светлана нервно на'));assert(italicLines[0].direction.includes('него смотрит.'));assert.equal(italicLines[1].speaker,'СВЕТЛАНА');
+assert.equal(parseScript('СЕРГЕЙ: Не [тихо] хочу.')[0].text,'Не хочу.');
+assert.equal(parseScript(convertPlayText('[Светлана сидит.]\nСЕРГЕЙ: Привет.'))[0].direction,'[Светлана сидит.]','Opening directions must be preserved');
+assert.equal(textItemsToLines([{...item('СЦЕНА 1',30,700,100),...italic}],styles),'СЦЕНА 1','Italic headings still split scenes');
+console.log('Italic-span checks passed: mixed and wrapped text, separate stage directions, opening directions, dialogue-only text, and scene headings.');
+const {fontIsItalic}=require('../dist/pdf-import.js');
+const fontData=new Uint8Array(100),fontView=new DataView(fontData.buffer);fontView.setUint16(4,1);fontView.setUint32(12,0x706f7374);fontView.setUint32(20,32);fontView.setUint32(24,32);fontView.setInt32(36,-12*65536);
+assert.equal(fontIsItalic({name:'ABCDEF+F1',data:fontData}),true,'An opaque subset name still exposes its italic angle');fontView.setInt32(36,0);assert.equal(fontIsItalic({name:'ABCDEF+F1',data:fontData}),false);assert.equal(fontIsItalic({cssFontInfo:{italicAngle:'12'}}),true);assert.equal(fontIsItalic({italic:true}),true);

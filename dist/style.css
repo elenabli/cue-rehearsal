@@ -6,3 +6,5 @@
 .scene-picker{margin:0 0 20px;padding:17px;background:#eaf0df;border:1px solid #d9e2cb;border-radius:8px}.scene-picker label{display:block;font-size:11px;font-weight:600;margin-bottom:9px}.scene-picker select{width:100%;background:#fbfcf7}.scene-picker p{font-size:10px;color:#7b896f;margin:9px 0 0}@media(max-width:650px){.scene-picker{order:1;margin:0}.role-card{order:2}.stage-card{order:3}#typed-form{order:4}.session-progress{order:5}.script-card{order:6}.tip{order:7}}
 
 .stage-line.directions-only{white-space:pre-line;font-size:21px;line-height:1.7;font-style:italic;color:#75806c}
+
+.stage-direction:not(:empty){white-space:pre-line;padding:14px 17px;border-left:3px solid #b9c7a4;background:#f0f3e8;border-radius:0 6px 6px 0;font-size:15px;line-height:1.7;margin-top:20px;color:#6c7962}.preview-line p.preview-direction{font-style:italic;font-size:12px;color:#87917b;border-top:1px solid #e1e6d7;padding-top:8px}

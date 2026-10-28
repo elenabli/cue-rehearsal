@@ -62,3 +62,9 @@ assert.equal(vm.runInContext('data.role',ctx),'АННА','Character selection mu
 get('start').onclick();assert.equal(spoken.at(-1).text,'Доброе утро.','Partner speaks the other character’s cue');spoken.at(-1).onend();assert.equal(get('current-line').textContent,'Привет.');assert.equal(get('listen').disabled,false,'The chosen character can speak on their turn');
 get('role').value='СЕРГЕЙ';get('role').onchange({target:get('role')});assert.equal(vm.runInContext('data.role',ctx),'СЕРГЕЙ');assert.equal(index(),0);assert.equal(get('listen').disabled,false);
 console.log('Native character selection passed: chosen role survives render, saves, switches in both directions, and controls the correct rehearsal turn.');
+get('script-input').value='СЦЕНА 1\nСЕРГЕЙ: Не хочу. Пойду уже. [Светлана нервно на него смотрит.]\nСВЕТЛАНА: Подожди.';get('save-script').onclick();get('role').value='СЕРГЕЙ';get('role').onchange({target:get('role')});
+assert.equal(get('current-line').textContent,'Не хочу. Пойду уже.');assert.equal(get('stage-direction').textContent,'Ремарка\nСветлана нервно на него смотрит.');
+get('hear-line').onclick();assert.equal(spoken.at(-1).text,'Не хочу. Пойду уже.','Voice cue excludes the direction');spoken.at(-1).onend();
+get('typed').value='Не хочу. Пойду уже.';get('typed-form').onsubmit({preventDefault(){}});flush();assert.equal(index(),1,'Actor is only required to say dialogue');
+get('restart').onclick();get('role').value='СВЕТЛАНА';get('role').onchange({target:get('role')});get('start').onclick();assert.equal(spoken.at(-1).text,'Не хочу. Пойду уже.','Partner playback also excludes directions');
+console.log('Stage-direction rehearsal passed: separate display, cue playback, partner playback, and word checking use dialogue only.');
