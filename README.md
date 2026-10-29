@@ -2,6 +2,26 @@
 
 An iPhone-friendly rehearsal app that reads your scene partners’ lines and checks yours aloud, advancing when you get them right.
 
+## Try it online
+
+[Open Cue](https://cue-rehearsal-elenablinova.leena-blinova.chatgpt.site) to try the app in your browser. No cloning or local setup is required. On iPhone, open it in Safari and choose **Share → Add to Home Screen** to install it.
+
+You can start with the included demo scene or import your own play. Each visitor’s scripts and progress stay in their own browser.
+
+## Clone and run locally
+
+You need Git and Python 3:
+
+```sh
+git clone https://github.com/elenabli/cue-rehearsal.git
+cd cue-rehearsal
+python3 -m http.server 4173 --directory dist
+```
+
+Open [http://localhost:4173](http://localhost:4173) on the same computer. No API keys, package installation, or build step is needed.
+
+For access from an iPhone or another device, serve `dist/` from an HTTPS static host so microphone access is available.
+
 ## Rehearse a play
 
 1. Open Cue in Safari. To install it on iPhone, choose **Share → Add to Home Screen**.
@@ -38,15 +58,7 @@ PDF extraction happens on your device. Scripts, the selected character, and prog
 
 Speech input uses the browser’s Web Speech service. It needs microphone permission and may require an internet connection. Audio may be processed by the browser vendor’s speech service, and recognition can mishear spoken lines. After an initial visit, the app is cached for offline reading; speech input may still need a connection.
 
-## Run your own copy
-
-The source is a static web app with no installation or build step. Serve the `dist/` directory:
-
-```sh
-python3 -m http.server 4173 --directory dist
-```
-
-Open `http://localhost:4173`. For use on another device, deploy `dist/` to a static host with HTTPS so microphone access is available. Each visitor’s play and progress remain in their own browser.
+## Development
 
 Run the automated checks with Node.js:
 
