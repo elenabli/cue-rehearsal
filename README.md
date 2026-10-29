@@ -2,9 +2,11 @@
 
 An iPhone-friendly rehearsal app that reads your scene partners’ lines and checks yours aloud, advancing when you get them right.
 
+I built Cue quickly with AI coding tools, as an experiment in turning an idea into a working app.
+
 ## Try it online
 
-[Open Cue](https://cue-rehearsal-elenablinova.leena-blinova.chatgpt.site) to try the app in your browser. No cloning or local setup is required. On iPhone, open it in Safari and choose **Share → Add to Home Screen** to install it.
+[Open Cue](https://elenabli.github.io/cue-rehearsal/) to try the app in your browser. No cloning or local setup is required. On iPhone, open it in Safari and choose **Share → Add to Home Screen** to install it.
 
 You can start with the included demo scene or import your own play. Each visitor’s scripts and progress stay in their own browser.
 
@@ -59,6 +61,9 @@ PDF extraction happens on your device. Scripts, the selected character, and prog
 Speech input uses the browser’s Web Speech service. It needs microphone permission and may require an internet connection. Audio may be processed by the browser vendor’s speech service, and recognition can mishear spoken lines. After an initial visit, the app is cached for offline reading; speech input may still need a connection.
 
 ## Development
+
+Every push to `main` runs the tests and publishes `dist/` to GitHub Pages (`.github/workflows/pages.yml`).
+
 
 Run the automated checks with Node.js:
 
