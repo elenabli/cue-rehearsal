@@ -1,0 +1,26 @@
+# Local configuration and credentials
+.openai/
+.codex/
+.agents/
+.aws/
+.env
+.env.*
+!.env.example
+
+# Dependencies and machine files
+node_modules/
+.DS_Store
+Thumbs.db
+*.log
+
+# Private plays, uploads, and generated artifacts
+uploads/
+private/
+*.pdf
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+coverage/
+playwright-report/
+test-results/
