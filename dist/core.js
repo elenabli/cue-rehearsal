@@ -18,8 +18,10 @@
   }
   function parseScript(text,cast=[]){const lines=[];let current=null;const pending=[];for(const raw of cleanPaginationText(text).split(/\r?\n/)){const s=raw.trim();if(!s)continue;const match=s.match(/^([^:\[\]]{1,60}):\s*(.*)$/u);const speaker=match?(cast.length?resolveSpeaker(match[1].trim(),cast):(isSpeakerName(match[1].trim())?match[1].trim():null)):null;
     if(speaker){current={speaker,text:[...pending,match[2].trim()].join(' ').trim()};pending.length=0;lines.push(current);}else if(current){current.text+=' '+s;}else if(/^\[.*\]$/.test(s)){pending.push(s);}else{throw new Error('Start each speech with CHARACTER: dialogue.');}}
-    return lines.map(l=>({...l,text:l.text.replace(/\[[^\]]*\]/g,' ').replace(/\s+/g,' ').trim(),direction:(l.text.match(/\[[^\]]*\]/g)||[]).join(' ')})).filter(l=>l.text);
+    return lines.map(l=>({...l,text:flattenBrackets(l.text)})).map(l=>({...l,text:l.text.replace(/\[[^\]]*\]/g,' ').replace(/\s+/g,' ').trim(),direction:(l.text.match(/\[[^\]]*\]/g)||[]).join(' ')})).filter(l=>l.text);
   }
+  // Nested or unbalanced brackets, e.g. «[[кричит]]», collapse to one level.
+  function flattenBrackets(text){let depth=0,out='';for(const char of text){if(char==='['){if(!depth++)out+=char;}else if(char===']'){if(depth&&!--depth)out+=char;}else out+=char;}return depth?out+']':out;}
   function matches(expected,actual){const a=normalize(expected),b=normalize(actual);return !!a&&a===b;}
-  const api={pageNumberInfo,paginationTotals,cleanPaginationText,normalize,speakerKey,resolveSpeaker,isSpeakerName,parseScript,matches};root.CueCore=api;if(typeof module!=='undefined')module.exports=api;
+  const api={flattenBrackets,pageNumberInfo,paginationTotals,cleanPaginationText,normalize,speakerKey,resolveSpeaker,isSpeakerName,parseScript,matches};root.CueCore=api;if(typeof module!=='undefined')module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);
