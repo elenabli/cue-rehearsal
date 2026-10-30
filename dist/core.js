@@ -28,5 +28,19 @@
   // Recognition often misses an ending («нормальна») or splits a word («все таки»), so long lines forgive a little.
   function closeWords(a,b){return a===b||(Math.min(a.length,b.length)>=4&&editDistance(a,b)<=1);}
   function matches(expected,actual){const a=normalize(expected),b=normalize(actual);if(!a||!b)return false;if(a===b||a.replace(/ /g,'')===b.replace(/ /g,''))return true;const words=a.split(' ');return editDistance(words,b.split(' '),closeWords)<=Math.floor(words.length/5);}
-  const api={flattenBrackets,pageNumberInfo,paginationTotals,cleanPaginationText,normalize,speakerKey,resolveSpeaker,isSpeakerName,parseScript,matches};root.CueCore=api;if(typeof module!=='undefined')module.exports=api;
+  // Word-by-word comparison for feedback (a substitution costs more than one skip, so matching words line up): same, missing (not said), extra (said, not in the line), changed (said something else).
+  function diffWords(expected,actual){
+    const want=expected.split(/\s+/).map(word=>({word,key:normalize(word)})).filter(w=>w.key),got=normalize(actual).split(' ').filter(Boolean);
+    const cost=Array.from({length:want.length+1},(_,i)=>Array.from({length:got.length+1},(_,j)=>i+j));
+    const same=(i,j)=>want[i].key.split(' ').join('')===got[j]||closeWords(want[i].key,got[j]);
+    for(let i=1;i<=want.length;i++)for(let j=1;j<=got.length;j++)cost[i][j]=Math.min(cost[i-1][j]+1,cost[i][j-1]+1,cost[i-1][j-1]+(same(i-1,j-1)?0:1.5));
+    const ops=[];let i=want.length,j=got.length;
+    while(i||j){
+      if(i&&j&&cost[i][j]===cost[i-1][j-1]+(same(i-1,j-1)?0:1.5)){ops.push(same(i-1,j-1)?{type:'same',expected:want[i-1].word,actual:got[j-1]}:{type:'changed',expected:want[i-1].word,actual:got[j-1]});i--;j--;}
+      else if(i&&cost[i][j]===cost[i-1][j]+1){ops.push({type:'missing',expected:want[i-1].word});i--;}
+      else{ops.push({type:'extra',actual:got[j-1]});j--;}
+    }
+    return ops.reverse();
+  }
+  const api={diffWords,flattenBrackets,pageNumberInfo,paginationTotals,cleanPaginationText,normalize,speakerKey,resolveSpeaker,isSpeakerName,parseScript,matches};root.CueCore=api;if(typeof module!=='undefined')module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

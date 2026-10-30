@@ -98,3 +98,32 @@ assert.equal(spoken.length,spokenBefore,'A refused mic stops before the partner 
 assert.equal(ctx.CueCore.matches('Мне кажется, это совершенно нормально сейчас','мне кажется это совершенно нормальна сейчас'),true,'A long line forgives one misheard ending');assert.equal(ctx.CueCore.matches('I thought you might still be here','I thought you were here'),false,'Forgiveness does not accept a different line');
 console.log('Speech fixes passed: mic permission on Start, stretched and stammered words, restarting a line, stuck sessions, interim-only results, and near-miss matching.');
 
+// Review fixes: saving an edit keeps progress, and a wrong answer typed while a correct one advances cannot stall the line.
+const typedSubmit=text=>{get('typed').value=text;get('typed-form').onsubmit({preventDefault(){}});};
+const editPlay=last=>`СЦЕНА 1\nСЕРГЕЙ: Раз.\nАННА: Два.\nСЕРГЕЙ: Три.\nСЦЕНА 2\nСЕРГЕЙ: Четыре.\nАННА: Пять.\nСЕРГЕЙ: Шесть.\nСЦЕНА 3\nСЕРГЕЙ: ${last}\nАННА: Восемь.`;
+get('restart').onclick();vm.runInContext('data.autoMic=false',ctx);get('cast-input').value='';get('title-input').value='Палец героя';get('script-input').value=editPlay('Семь.');get('save-script').onclick();get('role').value='СЕРГЕЙ';get('role').onchange({target:get('role')});
+typedSubmit('Раз');flush();get('scene-picker').onchange({target:{value:'2'}});typedSubmit('Семь');flush();get('scene-picker').onchange({target:{value:'1'}});typedSubmit('Четыре');flush();assert.equal(index(),1);
+get('title-input').value='Палец героя (draft 2)';get('script-input').value=editPlay('Семь, ну.');get('save-script').onclick();
+assert.equal(vm.runInContext('data.title',ctx),'Палец героя (draft 2)');assert.equal(vm.runInContext('data.activeScene',ctx),1,'Saving stays on the scene being rehearsed');assert.equal(index(),1,'…and on its line');assert.equal(get('current-line').textContent,'Пять.');
+assert.equal(vm.runInContext('data.scenes[0].index',ctx),1,'Unchanged scenes keep their progress');assert.equal(vm.runInContext('data.scenes[2].index',ctx),0,'An edited scene starts again');
+get('reset-progress').onclick();assert.equal(vm.runInContext('data.scenes.map(s=>s.index).join()',ctx),'0,0,0','Reset is a separate action for all scenes');assert.equal(index(),0);assert.equal(vm.runInContext('data.activeScene',ctx),1);
+get('scene-picker').onchange({target:{value:'0'}});typedSubmit('Раз');typedSubmit('Неверно');assert.equal(get('typed').disabled,true,'Typing is locked while a correct line advances');flush();assert.equal(index(),1,'A wrong answer during the advance delay does not cancel it');
+assert.equal(vm.runInContext('pendingAdvance',ctx),false,'Nothing is left pending after the advance');
+console.log('Review fixes passed: edits keep scene progress, separate reset, and no typed-answer stall.');
+// Hint during focus mode: first words, then more, and replaying the partner's cue.
+get('cast-input').value='';get('script-input').value='СЦЕНА 1\nСЕРГЕЙ: Ты где была всю ночь?\nАННА: Я гуляла по набережной до самого утра.';get('save-script').onclick();get('role').value='АННА';get('role').onchange({target:get('role')});
+vm.runInContext('data.hide=true;data.autoMic=false',ctx);get('restart').onclick();assert.equal(get('hint').hidden,true,'No Hint before the rehearsal starts');
+get('start').onclick();assert.equal(get('hint').hidden,true,'No Hint while the partner speaks');spoken.at(-1).onend();assert.equal(index(),1);assert.equal(get('hint').hidden,false,'Hint appears on your turn');assert.equal(get('hint-menu').hidden,true);
+get('hint').onclick();assert.equal(get('hint-menu').hidden,false);get('hint-words').onclick();assert.equal(get('hint-menu').hidden,true);assert.equal(get('hint-text').textContent,'Я гуляла по …');assert.equal(get('current-line').hidden,true,'The rest of the line stays hidden');
+get('hint-words').onclick();assert.equal(get('hint-text').textContent,'Я гуляла по набережной до самого …');
+get('hint-cue').onclick();assert.equal(spoken.at(-1).text,'Ты где была всю ночь?','Replay cue speaks the partner line again');assert.equal(get('hint').hidden,true);spoken.at(-1).onend();assert.equal(index(),1,'…and stays on your line');assert.equal(vm.runInContext('running',ctx),true);assert.equal(get('hint-text').textContent,'Я гуляла по набережной до самого …','Revealed words stay while on this line');
+typedSubmit('Я гуляла по набережной до самого утра');flush();get('restart').onclick();get('start').onclick();spoken.at(-1).onend();assert.equal(get('hint-text').hidden,true,'A new attempt starts without hints');
+console.log('Hint passed: only on your turn, first words step by step, replay cue, and reset per line.');
+// Mismatch feedback marks missed, extra, and substituted words.
+const ops=ctx.CueCore.diffWords('Я гуляла по набережной до самого утра.','я гуляла по набережной до утра вчера').map(o=>o.type+':'+(o.expected||o.actual)).join(' ');
+assert.equal(ops,'same:Я same:гуляла same:по same:набережной same:до missing:самого same:утра. extra:вчера');
+assert.equal(ctx.CueCore.diffWords('Ты где была?','ты кто была').map(o=>o.type).join(),'same,changed,same');
+vm.runInContext('data.hide=false',ctx);get('restart').onclick();get('start').onclick();spoken.at(-1).onend();typedSubmit('Я гуляла по набережной утра');let shown=get('feedback').children.map(el=>el.children?.map(w=>w.className+':'+w.textContent).join(' ')).join('|');
+assert(shown.includes('diff-missing:до')&&shown.includes('diff-same:гуляла'),shown);
+vm.runInContext('data.hide=true',ctx);typedSubmit('Я гуляла по набережной утра');shown=get('feedback').children[1].children.map(w=>w.textContent).join(' ');assert(!shown.includes('самого')&&shown.includes('____'),'Hidden lines show blanks, not the missing words');
+console.log('Mismatch feedback passed: missing, extra, and substituted words, with blanks when lines are hidden.');

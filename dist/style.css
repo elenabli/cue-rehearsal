@@ -42,3 +42,16 @@ body.rehearsing .shell{grid-template-columns:1fr}body.rehearsing main{padding:0 
 body.rehearsing .stage-card{min-height:calc(100dvh - 140px);border-color:transparent;box-shadow:none;margin:0;padding:12px 8px}body.rehearsing .stage-card[data-turn=partner],body.rehearsing .stage-card[data-turn=idle]{background:transparent}body.rehearsing .stage-content{min-height:0;padding:28px 4px 12px}
 body.rehearsing .stage-card .transport{position:fixed;left:0;right:0;bottom:0;z-index:20;margin:0;background:#f6f5f0f2;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border-top:1px solid var(--line);padding:10px 16px calc(10px + env(safe-area-inset-bottom));gap:10px}body.rehearsing .transport .primary{flex:1;max-width:320px;min-height:54px;font-size:16px;border-radius:10px}body.rehearsing .speech-button{min-height:54px;min-width:120px;font-size:16px;border-radius:10px}
 @media(min-width:651px){body.rehearsing .stage-line{font-size:38px}body.rehearsing .cue-line p{font-size:19px}}
+.reset-setting{margin-top:22px;padding-top:18px;border-top:1px solid var(--line)}.reset-setting p{margin:8px 0 0;font-size:13px}
+/* Hint: only on your turn in focus mode, a small text button beside Pause / Speak */
+.hint-button{display:none}
+body.rehearsing .hint-button:not([hidden]){display:block;background:transparent;border:0;color:var(--muted);font-size:14px;font-weight:600;min-height:54px;padding:0 6px}
+.hint-menu{position:absolute;bottom:100%;left:50%;transform:translateX(-50%);display:flex;gap:8px;padding:8px;margin-bottom:8px;background:#fbfbf7;border:1px solid var(--line);border-radius:10px;box-shadow:0 4px 16px #253b2920}
+.hint-menu[hidden],.hint-menu button[hidden]{display:none}
+.hint-menu button{background:transparent;border:1px solid #d7dcd0;border-radius:8px;min-height:44px;padding:0 14px;font-size:14px;color:var(--ink);white-space:nowrap}
+#hint-text{font-style:normal;color:var(--ink)}
+/* Mismatch feedback: missed words underlined, words heard instead struck through */
+.diff-line{margin:4px 0;font:16px/1.6 Georgia,serif;color:var(--ink);white-space:normal}
+.diff-missing,.diff-changed{text-decoration:underline 2px #c0703f;text-underline-offset:3px;font-weight:600}
+.diff-changed s,s.diff-extra{color:#8a5338;font-size:.85em;text-decoration-thickness:1.5px}
+.feedback small{display:block;font-size:11px;color:var(--muted)}
