@@ -103,7 +103,9 @@ for(const id of ['edit-script','full-script'])$(id).onclick=()=>showView('script
 $('scene-edit').onclick=()=>{showView('script');const editor=$('script-input');let cursor=0,start=-1;for(let i=0;i<=data.activeScene;i++){start=editor.value.indexOf(data.scenes[i].title,cursor);if(start<0)break;cursor=start+data.scenes[i].title.length;}editor.focus?.();if(start>=0)editor.setSelectionRange?.(start,cursor);};
 $('save-script').onclick=()=>{try{
  const fullText=CueCore.cleanPaginationText($('script-input').value);if(!fullText.trim())throw Error('Add a script or upload a PDF before saving.');const split=CuePdf.splitPlayScenes(fullText);
- const nextScenes=split.scenes.length?split.scenes:[{title:'Practice scene',script:fullText}];const cast=$('cast-input').value.split(/\r?\n/).map(name=>name.trim()).filter(Boolean);if(!cast.length)cast.push(...CuePdf.extractCast(fullText));
+ const nextScenes=split.scenes.length?split.scenes:[{title:'Practice scene',script:fullText}];const cast=$('cast-input').value.split(/\r?\n/).map(name=>name.trim()).filter(Boolean);// A cast left over from another play names nobody here; detect it afresh.
+ const labels=fullText.split(/\r?\n/).map(row=>row.trim().match(/^([^:\[\]]{1,60}?)\s*(?:\([^)]*\)\s*)?(?:[:：.—–]|$)/u)?.[1]).filter(Boolean);
+ if(!cast.some(name=>labels.some(label=>CueCore.resolveSpeaker(label,[name]))))cast.splice(0,cast.length,...CuePdf.extractCast(fullText));
  const validated=nextScenes.map(scene=>{
   if(!scene.script.trim())return {...scene,index:0,kind:'review'};
   let script=cast.length?CuePdf.convertPlayText(scene.script,cast):scene.script,parsed=[];try{parsed=CueCore.parseScript(script,cast);}catch{

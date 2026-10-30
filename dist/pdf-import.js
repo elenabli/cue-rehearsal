@@ -24,7 +24,7 @@
       }
       // Scene headings must remain searchable even when typeset in italics.
       if(isHeading(plain.trim()))return plain.trim();
-      return runs.map(run=>run.italic&&run.text.trim()?' ['+run.text.trim().replace(/\[/g,'(').replace(/\]/g,')')+'] ':run.text).join('').replace(/[ \t]+/g,' ').trim();
+      return runs.map(run=>run.italic&&run.text.trim()?' ['+run.text.trim().replace(/^\(([^()]*)\)$/,'$1').replace(/\[/g,'(').replace(/\]/g,')')+'] ':run.text).join('').replace(/[ \t]+/g,' ').trim();
     }).filter(Boolean).join('\n');
   }
   function fontIsItalic(font){
@@ -52,7 +52,13 @@
     }
     return textItemsToLines(content.items,styles,page.view);
   }
-  function isHeading(s){return /^(?:(?:ACT|SCENE|PART|CHAPTER|PAGE|АКТ|СЦЕНА|ДЕЙСТВИЕ|КАРТИНА)(?=\s|[.:№]|$).*|[IVXLCDM]+\.?|DRAMATIS PERSONAE|CHARACTERS|CAST(?: OF CHARACTERS)?|THE END|CURTAIN|FINIS)$/iu.test(s);}
+  // A keyword only marks a heading when typeset in capitals or followed by a
+  // number, so wrapped dialogue such as «действие лекарства…» is kept.
+  function isHeading(s){
+    if(/^(?:[IVXLCDM]+\.?|DRAMATIS PERSONAE|CHARACTERS|CAST(?: OF CHARACTERS)?|THE END|CURTAIN|FINIS)$/iu.test(s))return true;
+    const m=s.match(/^(ACT|SCENE|PART|CHAPTER|PAGE|АКТ|СЦЕНА|ДЕЙСТВИЕ|КАРТИНА)(?=\s|[.:№]|$)(.*)$/iu);if(!m)return false;
+    return m[1]===m[1].toLocaleUpperCase()||/^\s*[.:]?\s*(?:№\s*)?(?:\d+|[IVXLCDM]+)(?=$|[\s.:—–-])/u.test(m[2])||/^\s*(?:перв|втор|трет|четв[её]рт|пят|шест|one|two|three|four|five|first|second|third)\p{L}*\.?$/iu.test(m[2]);
+  }
   function standaloneName(s){return s.length<=45&&/\p{L}/u.test(s)&&s===s.toLocaleUpperCase()&&!/[\[\]():!?;“”"0-9]/u.test(s)&&s.split(/\s+/).length<=4&&!isHeading(s);}
   function extractCast(text){
     const preamble=splitPlayScenes(text).preamble||(!splitPlayScenes(text).scenes.length?text:'');
@@ -67,6 +73,15 @@
       const speechLabels=splitPlayScenes(text).scenes.flatMap(scene=>scene.script.split('\n').map(row=>row.trim().split(/[:：.]|[—–]/)[0].trim()).filter(name=>namePattern.test(name)));
       for(let row of rows){const name=row.replace(/^(?:[•*—–-]|\d+[.)])\s*/,'').split(/\s+[—–-]\s*|[,:(]/)[0].replace(/[:.;]+$/,'').trim();if(namePattern.test(name)&&!isHeading(name)&&speechLabels.some(label=>castResolve(label,[name]))&&!names.includes(name))names.push(name);}
     }
+    // Rosters often miss or misspell roles. Add all-caps labels that open at
+    // least two speeches, so unlisted characters keep their own lines.
+    const counts=new Map();
+    for(const row of (splitPlayScenes(text).scenes.map(scene=>scene.script).join('\n')||text).split(/\r?\n/)){
+      const m=row.trim().match(/^([\p{Lu}][\p{Lu}\p{M}\d'’ -]{1,44}?)\s*(?:\([^)]*\)\s*)?(?:[:：]|\.(?=\s))\s*(.*)$/u);
+      if(!m||!/\p{Ll}/u.test(m[2])||!/\p{Lu}.*\p{Lu}/u.test(m[1]))continue;const label=m[1].trim();
+      if(isHeading(label)||names.some(name=>castResolve(label,[name])))continue;counts.set(label,(counts.get(label)||0)+1);
+    }
+    for(const [label,count] of counts)if(count>=2)names.push(label);
     return names;
   }
   function convertWithCast(text,cast){
@@ -101,7 +116,7 @@
   // restart in a later act; each occurrence remains a separate scene.
   function splitPlayScenes(text){
     const rows=text.replace(/\r/g,'').split('\n');const scenes=[];const preamble=[];let current=null;
-    const heading=/^\s*((?:сцена|scene)\s*(?:№\s*|no\.?\s*)?(?:\(\s*)?(?:\d+|[IVXLCDM]+)(?:\s*\))?(?=$|[\s.:—–-]).*)$/iu;
+    const heading=/^\s*((?:сцена|scene)\s*[.:]?\s*(?:№\s*|no\.?\s*)?(?:\(\s*)?(?:\d+|[IVXLCDM]+)(?:\s*\))?(?=$|[\s.:—–-]).*)$/iu;
     for(const row of rows){
       const match=row.replace(/\u00a0/g,' ').match(heading);
       if(match){current={title:match[1].trim(),script:''};scenes.push(current);}

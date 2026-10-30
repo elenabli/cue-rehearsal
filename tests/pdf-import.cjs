@@ -67,3 +67,35 @@ const {cleanPaginationText}=require('../dist/core.js');assert.equal(cleanPaginat
 assert.equal(cleanPaginationText('СЕРГЕЙ: Мне 35 лет.\n1/2'),'СЕРГЕЙ: Мне 35 лет.\n1/2','A lone ambiguous fraction is not deleted from an older script');assert.equal(parseScript('СЕРГЕЙ:\n35')[0].text,'35');
 assert.equal(cleanPaginationText('Сцена 1\nСЕРГЕЙ: Да.\n35/59\nСцена 2\nСЕРГЕЙ: Нет.\n36/59'),'Сцена 1\nСЕРГЕЙ: Да.\nСцена 2\nСЕРГЕЙ: Нет.');
 console.log('Pagination checks passed: margin row formats, header/footer numbers, genuine dialogue numbers/fractions, and legacy page markers.');
+// Regressions from ПАЛЕЦ ГЕРОЯ: dotted headings, unlisted speakers, wrapped
+// lines that start with heading words, and italic asides in parentheses.
+const dotted=splitPlayScenes('СЦЕНА 2. КВАРТИРА.\nСЕРГЕЙ: Да.\nСЦЕНА. 3 КВАРТИРА.\nСЕРГЕЙ: Нет.\nСЦЕНА.4 ДЕНЬ.\nСЕРГЕЙ: Может.\nСЦЕНА. 6. ЗА ГАРАЖАМИ.\nСЕРГЕЙ: Пока.');
+assert.deepEqual(dotted.scenes.map(s=>s.title),['СЦЕНА 2. КВАРТИРА.','СЦЕНА. 3 КВАРТИРА.','СЦЕНА.4 ДЕНЬ.','СЦЕНА. 6. ЗА ГАРАЖАМИ.']);
+assert.equal(splitPlayScenes('СЕРГЕЙ: Сцена. Занавес.').scenes.length,0,'A dot alone does not make a heading');
+const unlisted=`СЕРГЕЙ ГОРДЕЕВ (45) - СОТРУДНИК АВТОМОЙКИ
+ТАМАРА ПЕТРОВНА, ЕГО МАТЬ (67) - ПЕНСИОНЕРКА
+НИКОЛАЙ РОМАНЫЧ, ЕГО ОТЕЦ (75) - ПЕНСИОНЕР
+ЖУРНАЛИСТКА ГАЗЕТЫ «ТУЖАНСКИЙ ВЕСТНИК»
+СЦЕНА 1. КВАРТИРА.
+ТАМАРА ПЕТРОВНА: Коля! Иди сюда!
+НИКОЛАЙ РОМАНОВИЧ. О. Ремонт сделали?
+ТАМАРА ПЕТРОВНА: Сядь.
+НИКОЛАЙ РОМАНОВИЧ. А обои когда поклеили?
+СЕРГЕЙ: Мам.
+ЖУРНАЛИСТКА: Заметка. ВЕРНЫЙ ПРИСЯГЕ.
+ЖУРНАЛИСТКА: Скорбная весть.
+Причина гибели: неизвестна.
+Причина гибели: неизвестна.`;
+const unlistedCast=extractCast(unlisted);
+assert(unlistedCast.includes('НИКОЛАЙ РОМАНОВИЧ')&&unlistedCast.includes('ЖУРНАЛИСТКА'),'Repeated speech labels join the cast');
+assert(!unlistedCast.some(name=>/Причина|ВЕРНЫЙ/u.test(name)),'Mixed-case text and in-line capitals are not roles');
+const unlistedLines=parseScript(splitPlayScenes(preparePlayText(unlisted)).scenes[0].script,extractCast(preparePlayText(unlisted)));
+assert.deepEqual(unlistedLines.slice(0,4).map(l=>[l.speaker,l.text]),[['ТАМАРА ПЕТРОВНА','Коля! Иди сюда!'],['НИКОЛАЙ РОМАНОВИЧ','О. Ремонт сделали?'],['ТАМАРА ПЕТРОВНА','Сядь.'],['НИКОЛАЙ РОМАНОВИЧ','А обои когда поклеили?']]);
+const wrapped=parseScript(convertPlayText('АННА: Я думаю, что\nдействие лекарства скоро пройдёт.\nБОРИС: Part of me\npart of you.\nАННА: Акт милосердия.',['Анна','Борис']),['Анна','Борис']);
+assert.deepEqual(wrapped.map(l=>l.text),['Я думаю, что действие лекарства скоро пройдёт.','Part of me part of you.','Акт милосердия.']);
+assert.deepEqual(parseScript(convertPlayText('Сцена 1\nАКТ ПЕРВЫЙ\nДействие второе\nКартина 3\nАННА: Да.')).map(l=>l.text),['Да.'],'Real headings are still removed');
+assert.equal(textItemsToLines([{...item('ТАМАРА ПЕТРОВНА:',30,700,120),...regular},{...item('(кричит)',155,700,60),...italic},{...item('Коля!',220,700,40),...regular}],styles),'ТАМАРА ПЕТРОВНА: [кричит] Коля!');
+const aside=parseScript(convertPlayText('ТАМАРА ПЕТРОВНА: [(кричит)] Коля! Иди сюда!',['Тамара Петровна']),['Тамара Петровна'])[0];
+assert.equal(aside.text,'Коля! Иди сюда!');assert.equal(aside.direction,'[кричит]');
+assert.deepEqual(parseScript('ЛЁХА: [[качает головой]] Зачем?')[0],{speaker:'ЛЁХА',text:'Зачем?',direction:'[качает головой]'},'Saved plays with doubled brackets are repaired');
+console.log('Play import regressions passed: dotted scene headings, unlisted speakers, wrapped heading words, and doubled direction brackets.');
