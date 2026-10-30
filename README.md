@@ -30,7 +30,7 @@ For access from an iPhone or another device, serve `dist/` from an HTTPS static 
 2. Open **Script** (**My script** on a computer) and upload the entire play as a text-based PDF, including the cast list. Files can be up to 25 MB. You can also import a UTF-8 `.txt` file or paste text.
 3. Extract the play, then review the dialogue and **Characters**. Put one character name on each line in that field.
 4. Save the play, choose a scene, and select your character under **I’m playing**.
-5. Start rehearsal and allow microphone access. Cue speaks the other characters’ lines and listens on your turns. A matching transcript advances the scene; incorrect or missing words keep you on the same line.
+5. Start rehearsal and allow microphone access. Cue speaks the other characters’ lines and listens on your turns. A matching transcript advances the scene; incorrect or missing words keep you on the same line. Stretched words such as «ну-у» count as the plain word, and longer lines forgive a single misheard word.
 
 If the browser requires a tap to start listening, use **Speak**. You can also choose **Type your line instead** to check a line by typing. The screen stays on while a rehearsal is running. Rehearsal settings let you choose the language and voice, adjust the partner’s pace, hide your lines, or turn automatic microphone activation off.
 
