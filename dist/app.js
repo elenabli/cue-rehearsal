@@ -52,7 +52,8 @@ function render(){const scene=data.scenes[data.activeScene],needsReview=scene.ki
  $('hide-toggle').setAttribute('aria-checked',String(data.hide));$('reveal-line').textContent=data.hide?'◌ Reveal my lines':'◌ Hide my lines';
  const percent=lines.length?Math.round(data.index/lines.length*100):0;$('progress').value=percent;$('progress-label').textContent=`${percent}% complete`;
  $('preview-lines').replaceChildren();for(const l of lines.slice(Math.min(data.index,lines.length-1),Math.min(data.index,lines.length-1)+3)){const el=document.createElement('div');el.className='preview-line'+(l.speaker===data.role?' mine':'');const label=document.createElement('b');label.textContent=l.speaker;if(l.speaker===data.role){const tag=document.createElement('span');tag.textContent='YOUR LINE';label.append(tag);}const p=document.createElement('p');p.textContent=data.hide&&l.speaker===data.role?'Your words, from memory.':l.text;el.append(label,p);if(l.direction){const direction=document.createElement('p');direction.className='preview-direction';direction.textContent='Direction: '+l.direction.replace(/\]\s*\[/g,' ').replace(/[\[\]]/g,'');el.append(direction);}$('preview-lines').append(el);}
- persist();syncWakeLock();
+ // While running, the page shows only the lines (see body.rehearsing in style.css).
+ document.body.classList[running?'add':'remove']('rehearsing');persist();syncWakeLock();
 }
 // Keep the screen on while rehearsing: the page pauses itself when hidden,
 // so iPhone auto-lock would otherwise end a hands-free run.
@@ -86,7 +87,7 @@ function listen(automatic=false){
  try{rec.start();render();}catch{recognition=null;running=false;document.body.classList.remove('listening');feedback('Safari needs a tap to continue. Tap Speak.',true);render();}
 }
 
-$('start').onclick=()=>{if(['directions','review'].includes(data.scenes[data.activeScene].kind)){selectScene(data.activeScene+1);return;}if(running){pause();return;}stopAudio();if(data.index>=lines.length)data.index=0;running=true;feedback();render();playCurrent();};
+$('start').onclick=()=>{if(['directions','review'].includes(data.scenes[data.activeScene].kind)){selectScene(data.activeScene+1);return;}if(running){pause();return;}stopAudio();if(data.index>=lines.length)data.index=0;running=true;feedback();render();window.scrollTo(0,0);playCurrent();};
 $('listen').onclick=()=>listen(false);$('restart').onclick=()=>{pause();data.index=0;feedback();$('typed').value='';render();};
 $('hear-line').onclick=()=>{const text=['directions','review'].includes(data.scenes[data.activeScene].kind)?data.script.replace(/[\[\]]/g,''):lines[data.index]?.text;if(text){pause();speak(text);}};
 function toggleHide(){data.hide=!data.hide;render();}$('reveal-line').onclick=toggleHide;$('hide-toggle').onclick=toggleHide;
