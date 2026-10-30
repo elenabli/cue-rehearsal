@@ -98,3 +98,15 @@ assert.equal(spoken.length,spokenBefore,'A refused mic stops before the partner 
 assert.equal(ctx.CueCore.matches('Мне кажется, это совершенно нормально сейчас','мне кажется это совершенно нормальна сейчас'),true,'A long line forgives one misheard ending');assert.equal(ctx.CueCore.matches('I thought you might still be here','I thought you were here'),false,'Forgiveness does not accept a different line');
 console.log('Speech fixes passed: mic permission on Start, stretched and stammered words, restarting a line, stuck sessions, interim-only results, and near-miss matching.');
 
+// Review fixes: saving an edit keeps progress, and a wrong answer typed while a correct one advances cannot stall the line.
+const typedSubmit=text=>{get('typed').value=text;get('typed-form').onsubmit({preventDefault(){}});};
+const editPlay=last=>`СЦЕНА 1\nСЕРГЕЙ: Раз.\nАННА: Два.\nСЕРГЕЙ: Три.\nСЦЕНА 2\nСЕРГЕЙ: Четыре.\nАННА: Пять.\nСЕРГЕЙ: Шесть.\nСЦЕНА 3\nСЕРГЕЙ: ${last}\nАННА: Восемь.`;
+get('restart').onclick();vm.runInContext('data.autoMic=false',ctx);get('cast-input').value='';get('title-input').value='Палец героя';get('script-input').value=editPlay('Семь.');get('save-script').onclick();get('role').value='СЕРГЕЙ';get('role').onchange({target:get('role')});
+typedSubmit('Раз');flush();get('scene-picker').onchange({target:{value:'2'}});typedSubmit('Семь');flush();get('scene-picker').onchange({target:{value:'1'}});typedSubmit('Четыре');flush();assert.equal(index(),1);
+get('title-input').value='Палец героя (draft 2)';get('script-input').value=editPlay('Семь, ну.');get('save-script').onclick();
+assert.equal(vm.runInContext('data.title',ctx),'Палец героя (draft 2)');assert.equal(vm.runInContext('data.activeScene',ctx),1,'Saving stays on the scene being rehearsed');assert.equal(index(),1,'…and on its line');assert.equal(get('current-line').textContent,'Пять.');
+assert.equal(vm.runInContext('data.scenes[0].index',ctx),1,'Unchanged scenes keep their progress');assert.equal(vm.runInContext('data.scenes[2].index',ctx),0,'An edited scene starts again');
+get('reset-progress').onclick();assert.equal(vm.runInContext('data.scenes.map(s=>s.index).join()',ctx),'0,0,0','Reset is a separate action for all scenes');assert.equal(index(),0);assert.equal(vm.runInContext('data.activeScene',ctx),1);
+get('scene-picker').onchange({target:{value:'0'}});typedSubmit('Раз');typedSubmit('Неверно');assert.equal(get('typed').disabled,true,'Typing is locked while a correct line advances');flush();assert.equal(index(),1,'A wrong answer during the advance delay does not cancel it');
+assert.equal(vm.runInContext('pendingAdvance',ctx),false,'Nothing is left pending after the advance');
+console.log('Review fixes passed: edits keep scene progress, separate reset, and no typed-answer stall.');
