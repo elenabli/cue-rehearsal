@@ -29,6 +29,10 @@ function sceneLines(scene){return ['directions','review'].includes(scene.kind)?[
 let lines;try{lines=sceneLines(data.scenes[data.activeScene]);if(!lines.length&&!['directions','review'].includes(data.scenes[data.activeScene].kind))throw Error();}catch{lines=[];data.scenes[data.activeScene].kind='review';}
 let roles=playRoles();if(!roles.length)roles=['ACTOR'];if(!roles.includes(data.role))data.role=roles[0];data.index=Math.max(0,Math.min(Number(data.index)||0,lines.length));
 let hint={key:'',words:0,open:false};
+// Marker: words of your line heard so far, from the recognizer's interim results; the whole line once it's accepted.
+let heard={key:'',count:0};
+function heardPrefix(text,said){const got=CueCore.normalize(said).split(' ').filter(Boolean);let n=0,j=0;text.split(/\s+/).every((w,i)=>{const parts=CueCore.normalize(w).split(' ').filter(Boolean);if(!parts.length)return true;if(!parts.every((p,x)=>got[j+x]===p))return false;j+=parts.length;n=i+1;return true;});return n;}
+function paintHeard(){const line=lines[data.index];if(!running||!line||line.speaker!==data.role)return;const words=line.text.split(/\s+/),count=pendingAdvance?words.length:heard.key===data.activeScene+':'+data.index?heard.count:0;if(!count)return;const el=$('current-line');el.textContent='';words.forEach((w,i)=>{const s=document.createElement('span');s.textContent=w;if(i<count)s.className='heard';el.append(s);if(i<words.length-1)el.append(' ');});}
 let running=false,recognition=null,speaking=false,runId=0,advanceTimer=null,voices=[],retryTimer=null,pendingAdvance=false,partialSpeech='',silenceRetries=0,activeUtterance=null,primer=null,micReady=false;
 const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
 try{navigator.permissions?.query({name:'microphone'}).then(status=>{micReady=status.state==='granted';status.onchange=()=>{micReady=status.state==='granted';};}).catch(()=>{});}catch{}
@@ -41,7 +45,7 @@ function render(){const scene=data.scenes[data.activeScene],needsReview=scene.ki
  $('play-title').textContent=data.title;$('scene-subtitle').textContent=`${data.scenes[data.activeScene].title} · ${data.activeScene+1} of ${data.scenes.length}`;
  $('scene-picker-wrap').hidden=data.scenes.length<2;$('scene-picker').replaceChildren(...data.scenes.map((scene,i)=>{const o=document.createElement('option');o.value=String(i);o.textContent=scene.title+(scene.kind==='review'?' · needs review':'');return o;}));$('scene-picker').value=String(data.activeScene);$('scene-summary').textContent=`${data.scenes.length} scenes in your play · Progress is saved for each scene`;$('line-count').textContent=needsReview?'REVIEW NEEDED':directionsOnly?'STAGE DIRECTIONS':complete?'SCENE COMPLETE':`${data.index+1} / ${lines.length}`;
  $('speaker').textContent=needsReview?'TEXT KEPT · NEEDS REVIEW':directionsOnly?'STAGE DIRECTIONS ONLY':complete?'TAKE A BOW':`${line.speaker}${mine?' · YOU':''}`;
- $('current-line').textContent=directionsOnly?(scene.script.replace(/[\[\]]/g,'')||'No text was extracted for this scene. Check the original PDF.'):complete?'A little more yours, every time.':line.text;$('current-line').classList.toggle('directions-only',directionsOnly);
+ $('current-line').textContent=directionsOnly?(scene.script.replace(/[\[\]]/g,'')||'No text was extracted for this scene. Check the original PDF.'):complete?'A little more yours, every time.':line.text;$('current-line').classList.toggle('directions-only',directionsOnly);paintHeard();
  // Hint: a stuck actor can reveal the first words or hear the cue again without leaving focus mode.
  const hintKey=data.activeScene+':'+data.index;if(hint.key!==hintKey)hint={key:hintKey,words:0,open:false};const cueBefore=mine&&data.index>0&&lines[data.index-1].speaker!==data.role?lines[data.index-1]:null,canHint=running&&mine&&!pendingAdvance&&!speaking&&(data.hide||!!cueBefore);
  $('hint').hidden=!canHint;$('hint').setAttribute('aria-expanded',String(canHint&&hint.open));$('hint-menu').hidden=!(canHint&&hint.open);$('hint-words').hidden=!data.hide;$('hint-words').textContent=hint.words?'More words':'First words';$('hint-cue').hidden=!cueBefore;
@@ -86,12 +90,12 @@ function listen(automatic=false){
  if(!lines[data.index]||lines[data.index].speaker!==data.role||recognition||speaking||pendingAdvance)return;
  if(!running&&!automatic)running=true;
  clearTimeout(retryTimer);const rec=new Recognition();recognition=rec;rec.lang=data.language;rec.interimResults=true;rec.continuous=false;rec.maxAlternatives=5;
- const token=runId,lineIndex=data.index;let finals=[],interim='',failed=false,retryAllowed=true,ended=false,watchdog=null;
+ const token=runId,lineIndex=data.index;heard={key:'',count:0};let finals=[],interim='',failed=false,retryAllowed=true,ended=false,watchdog=null;
  const candidatesFor=rows=>{let combined=[partialSpeech],fresh=[''];for(const row of rows){combined=combined.flatMap(prefix=>row.map(text=>(prefix+' '+text).trim())).slice(0,25);fresh=fresh.flatMap(prefix=>row.map(text=>(prefix+' '+text).trim())).slice(0,25);}return [...new Set(partialSpeech?[...combined,...fresh]:combined)];};
  // iOS Safari can keep a session open without ever reporting results, which left the mic on but deaf. Stop a quiet session, and drop it if it won't stop.
  const arm=ms=>{clearTimeout(watchdog);watchdog=setTimeout(()=>{if(ended||recognition!==rec)return;try{rec.stop();}catch{}watchdog=setTimeout(()=>{if(ended||recognition!==rec)return;rec.onresult=rec.onerror=rec.onend=null;try{rec.abort();}catch{}finish();},1500);},ms);};
  rec.onstart=()=>{micReady=true;arm(9000);document.body.classList.add('listening');feedback(partialSpeech?'Keep going…':'Listening… Say your line, then pause.');render();};
- rec.onresult=e=>{if(token!==runId||lineIndex!==data.index)return;arm(3000);interim='';finals=[];for(let i=0;i<e.results.length;i++){const result=e.results[i];if(result.isFinal)finals.push(Array.from(result).map(a=>a.transcript));else interim+=result[0].transcript;}
+ rec.onresult=e=>{if(token!==runId||lineIndex!==data.index)return;arm(3000);interim='';finals=[];for(let i=0;i<e.results.length;i++){const result=e.results[i];if(result.isFinal)finals.push(Array.from(result).map(a=>a.transcript));else interim+=result[0].transcript;}heard={key:data.activeScene+':'+lineIndex,count:heardPrefix(lines[lineIndex]?.text||'',finals.map(a=>a[0]).join(' ')+' '+interim)};paintHeard();
   feedback('Listening…\n“'+[partialSpeech,...finals.map(r=>r[0]),interim].filter(Boolean).join(' ')+'”');
   if(finals.length&&candidatesFor(finals).some(text=>CueCore.matches(lines[lineIndex].text,text)))rec.stop();
  };
