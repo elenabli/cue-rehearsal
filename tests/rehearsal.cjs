@@ -127,3 +127,11 @@ vm.runInContext('data.hide=false',ctx);get('restart').onclick();get('start').onc
 assert(shown.includes('diff-missing:до')&&shown.includes('diff-same:гуляла'),shown);
 vm.runInContext('data.hide=true',ctx);typedSubmit('Я гуляла по набережной утра');shown=get('feedback').children[1].children.map(w=>w.textContent).join(' ');assert(!shown.includes('самого')&&shown.includes('____'),'Hidden lines show blanks, not the missing words');
 console.log('Mismatch feedback passed: missing, extra, and substituted words, with blanks when lines are hidden.');
+// Marker: highlight only the leading words heard so far, ignoring punctuation, case and ё/е.
+const heardPrefix=(text,said)=>vm.runInContext(`heardPrefix(${JSON.stringify(text)},${JSON.stringify(said)})`,ctx);
+assert.equal(heardPrefix('В две тысячи девятом. Сядь. Серёжа погиб.','в две тысячи'),3);
+assert.equal(heardPrefix('В две тысячи девятом. Сядь. Серёжа погиб.','в две тысячи девятом сядь сережа'),6);
+assert.equal(heardPrefix('Не хочу. Пойду уже.','не могу пойду'),1,'Marker stops at the first wrong word');
+assert.equal(heardPrefix('— Ну-у, пойду.','ну'),2,'Leading dash waits for speech; stretched words match');
+assert.equal(heardPrefix('Сядь.',''),0);
+console.log('Marker passed: heard words, first wrong word, punctuation and stretched words.');
