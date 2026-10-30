@@ -28,11 +28,12 @@ function playRoles(){if(data.cast.length)return [...data.cast];const names=[];fo
 function sceneLines(scene){return ['directions','review'].includes(scene.kind)?[]:CueCore.parseScript(scene.script,data.cast);}
 let lines;try{lines=sceneLines(data.scenes[data.activeScene]);if(!lines.length&&!['directions','review'].includes(data.scenes[data.activeScene].kind))throw Error();}catch{lines=[];data.scenes[data.activeScene].kind='review';}
 let roles=playRoles();if(!roles.length)roles=['ACTOR'];if(!roles.includes(data.role))data.role=roles[0];data.index=Math.max(0,Math.min(Number(data.index)||0,lines.length));
-let running=false,recognition=null,speaking=false,runId=0,advanceTimer=null,voices=[],retryTimer=null,pendingAdvance=false,partialSpeech='',silenceRetries=0,activeUtterance=null;
+let running=false,recognition=null,speaking=false,runId=0,advanceTimer=null,voices=[],retryTimer=null,pendingAdvance=false,partialSpeech='',silenceRetries=0,activeUtterance=null,primer=null,micReady=false;
 const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+try{navigator.permissions?.query({name:'microphone'}).then(status=>{micReady=status.state==='granted';status.onchange=()=>{micReady=status.state==='granted';};}).catch(()=>{});}catch{}
 function persist(){if(data.scenes?.[data.activeScene])data.scenes[data.activeScene].index=data.index;try{localStorage.setItem('cue-v1',JSON.stringify(data));}catch{storageFailed=true;$('storage-notice').textContent='Browser storage is unavailable. Export your script to keep a copy.';}}
 function feedback(message='',error=false){$('feedback').textContent=message;$('feedback').classList.toggle('error',error);}
-function stopAudio(){runId++;clearTimeout(advanceTimer);clearTimeout(retryTimer);pendingAdvance=false;partialSpeech='';silenceRetries=0;if(recognition){const old=recognition;recognition=null;old.onend=null;old.onresult=null;old.onerror=null;old.abort();}window.speechSynthesis?.cancel();activeUtterance=null;speaking=false;document.body.classList.remove('listening');}
+function stopAudio(){runId++;clearTimeout(advanceTimer);clearTimeout(retryTimer);pendingAdvance=false;partialSpeech='';silenceRetries=0;if(recognition){const old=recognition;recognition=null;old.onend=null;old.onresult=null;old.onerror=null;old.abort();}if(primer){const old=primer;primer=null;old.onstart=old.onend=old.onerror=null;try{old.abort();}catch{}}window.speechSynthesis?.cancel();activeUtterance=null;speaking=false;document.body.classList.remove('listening');}
 function pause(){running=false;stopAudio();render();}
 function showView(name){pause();document.querySelectorAll('.view').forEach(el=>el.hidden=el.id!==name);document.querySelectorAll('.nav').forEach(el=>el.classList.toggle('active',el.dataset.view===name));$('crumb').textContent={rehearse:'Rehearse',script:'My script',settings:'Settings'}[name];window.scrollTo({top:0,behavior:'smooth'});}
 function render(){const scene=data.scenes[data.activeScene],needsReview=scene.kind==='review',directionsOnly=['directions','review'].includes(scene.kind),line=lines[data.index],mine=line?.speaker===data.role,complete=!line&&!directionsOnly;
@@ -63,31 +64,41 @@ function speak(text,onDone){if(!window.speechSynthesis){feedback('Spoken cues ar
 function advance(){pendingAdvance=false;partialSpeech='';silenceRetries=0;data.index++;$('typed').value='';feedback();render();if(running)playCurrent();}
 function playCurrent(){if(!running||data.index>=lines.length){running=false;render();return;}const l=lines[data.index];if(l.speaker!==data.role){if(!speak(l.text,()=>{if(running)advance();})){running=false;render();}}else{render();feedback('Your turn. Say your line.');if(data.autoMic)listen(true);}}
 function check(transcripts){const l=lines[data.index];if(!l||l.speaker!==data.role)return;const correct=transcripts.some(t=>CueCore.matches(l.text,t));if(correct){pendingAdvance=true;partialSpeech='';feedback('Correct ✓');render();const token=runId;advanceTimer=setTimeout(()=>{if(token===runId)advance();},950);}else{feedback(`Not quite — stay with this line.\nHeard: “${transcripts[0]||'…'}”\nTry the whole line again.${data.hide?' Reveal the line if you need a prompt.':''}`,true);}}
+// Safari asks for the microphone the first time recognition starts. When a partner speaks first, that would be after their cue, so open and close the mic during the Start tap instead.
+function askForMic(then){const l=lines[data.index];if(!Recognition||micReady||!data.autoMic||!l||l.speaker===data.role||!lines.some(x=>x.speaker===data.role)){then();return;}
+ const token=runId,rec=new Recognition();primer=rec;let done=false;const go=()=>{if(done)return;done=true;if(primer===rec)primer=null;rec.onstart=rec.onend=rec.onerror=null;try{rec.abort();}catch{}if(token===runId&&running)then();};
+ rec.lang=data.language;rec.onstart=()=>{micReady=true;go();};rec.onerror=e=>{if(['not-allowed','service-not-allowed'].includes(e.error)&&token===runId){done=true;primer=null;running=false;render();feedback('Allow the microphone for this site in Safari settings, then tap Start.',true);return;}go();};rec.onend=go;
+ try{rec.start();}catch{go();}}
 function listen(automatic=false){
  if(!Recognition){feedback('Voice input isn’t available here. Open the app in Safari, or type your line.',true);return;}
  if(!lines[data.index]||lines[data.index].speaker!==data.role||recognition||speaking||pendingAdvance)return;
  if(!running&&!automatic)running=true;
  clearTimeout(retryTimer);const rec=new Recognition();recognition=rec;rec.lang=data.language;rec.interimResults=true;rec.continuous=false;rec.maxAlternatives=5;
- const token=runId,lineIndex=data.index;let finals=[],failed=false,retryAllowed=true,ended=false;
- rec.onstart=()=>{document.body.classList.add('listening');feedback(partialSpeech?'Keep going…':'Listening… Say your line, then pause.');render();};
- rec.onresult=e=>{if(token!==runId||lineIndex!==data.index)return;let interim='';finals=[];for(let i=0;i<e.results.length;i++){const result=e.results[i];if(result.isFinal)finals.push(Array.from(result).map(a=>a.transcript));else interim+=result[0].transcript;}
+ const token=runId,lineIndex=data.index;let finals=[],interim='',failed=false,retryAllowed=true,ended=false,watchdog=null;
+ const candidatesFor=rows=>{let combined=[partialSpeech],fresh=[''];for(const row of rows){combined=combined.flatMap(prefix=>row.map(text=>(prefix+' '+text).trim())).slice(0,25);fresh=fresh.flatMap(prefix=>row.map(text=>(prefix+' '+text).trim())).slice(0,25);}return [...new Set(partialSpeech?[...combined,...fresh]:combined)];};
+ // iOS Safari can keep a session open without ever reporting results, which left the mic on but deaf. Stop a quiet session, and drop it if it won't stop.
+ const arm=ms=>{clearTimeout(watchdog);watchdog=setTimeout(()=>{if(ended||recognition!==rec)return;try{rec.stop();}catch{}watchdog=setTimeout(()=>{if(ended||recognition!==rec)return;rec.onresult=rec.onerror=rec.onend=null;try{rec.abort();}catch{}finish();},1500);},ms);};
+ rec.onstart=()=>{micReady=true;arm(9000);document.body.classList.add('listening');feedback(partialSpeech?'Keep going…':'Listening… Say your line, then pause.');render();};
+ rec.onresult=e=>{if(token!==runId||lineIndex!==data.index)return;arm(3000);interim='';finals=[];for(let i=0;i<e.results.length;i++){const result=e.results[i];if(result.isFinal)finals.push(Array.from(result).map(a=>a.transcript));else interim+=result[0].transcript;}
   feedback('Listening…\n“'+[partialSpeech,...finals.map(r=>r[0]),interim].filter(Boolean).join(' ')+'”');
-  if(finals.length){let candidates=[partialSpeech];for(const row of finals)candidates=candidates.flatMap(prefix=>row.map(text=>(prefix+' '+text).trim())).slice(0,25);if(candidates.some(text=>CueCore.matches(lines[lineIndex].text,text)))rec.stop();}
+  if(finals.length&&candidatesFor(finals).some(text=>CueCore.matches(lines[lineIndex].text,text)))rec.stop();
  };
  rec.onerror=e=>{if(token!==runId)return;failed=true;retryAllowed=e.error==='no-speech';if(!retryAllowed){running=false;partialSpeech='';}
   const messages={'not-allowed':'Allow the microphone for this site in Safari settings, then tap Speak.','service-not-allowed':'Safari blocked automatic listening. Tap Speak, or type your line.','audio-capture':'The microphone isn’t available. Check it, then tap Speak.','network':'Check your internet connection, then tap Speak.','no-speech':'Didn’t catch that. Try again.','aborted':'Listening stopped. Tap Speak.'};feedback(messages[e.error]||'Couldn’t recognize speech. Tap Speak to try again.',true);
  };
- rec.onend=()=>{if(ended||recognition!==rec)return;ended=true;recognition=null;document.body.classList.remove('listening');if(token!==runId||lineIndex!==data.index)return;
-  if(!failed&&finals.length){silenceRetries=0;let candidates=[partialSpeech];for(const row of finals)candidates=candidates.flatMap(prefix=>row.map(text=>(prefix+' '+text).trim())).slice(0,25);
+ const finish=()=>{if(ended||recognition!==rec)return;ended=true;recognition=null;clearTimeout(watchdog);document.body.classList.remove('listening');if(token!==runId||lineIndex!==data.index)return;
+  // iOS sometimes ends a session without marking anything final; what it heard is still the actor's line.
+  if(!finals.length&&interim.trim())finals=[[interim.trim()]];
+  if(!failed&&finals.length){silenceRetries=0;const candidates=candidatesFor(finals);
    if(candidates.some(text=>CueCore.matches(lines[lineIndex].text,text)))check(candidates);
    else{const expected=CueCore.normalize(lines[lineIndex].text);const prefix=candidates.filter(text=>{const value=CueCore.normalize(text);return value&&expected.startsWith(value+' ');}).sort((a,b)=>b.length-a.length)[0];if(prefix){partialSpeech=prefix;feedback('Good start. Carry on from where you stopped.');}else{partialSpeech='';check(candidates);}}
   }else if(retryAllowed){silenceRetries++;if(!failed)feedback('Didn’t hear the whole line. Please say it again.',true);}
   render();if(running&&data.autoMic&&!pendingAdvance&&retryAllowed){if(silenceRetries>=3){running=false;render();feedback('I can’t hear you. Tap Speak when you’re ready to go on.',true);}else retryTimer=setTimeout(()=>{if(token===runId&&lineIndex===data.index&&running)listen(true);},450);}
- };
+ };rec.onend=finish;
  try{rec.start();render();}catch{recognition=null;running=false;document.body.classList.remove('listening');feedback('Safari needs a tap to continue. Tap Speak.',true);render();}
 }
 
-$('start').onclick=()=>{if(['directions','review'].includes(data.scenes[data.activeScene].kind)){selectScene(data.activeScene+1);return;}if(running){pause();return;}stopAudio();if(data.index>=lines.length)data.index=0;running=true;feedback();render();window.scrollTo(0,0);playCurrent();};
+$('start').onclick=()=>{if(['directions','review'].includes(data.scenes[data.activeScene].kind)){selectScene(data.activeScene+1);return;}if(running){pause();return;}stopAudio();if(data.index>=lines.length)data.index=0;running=true;feedback();render();window.scrollTo(0,0);askForMic(playCurrent);};
 $('listen').onclick=()=>listen(false);$('restart').onclick=()=>{pause();data.index=0;feedback();$('typed').value='';render();};
 $('hear-line').onclick=()=>{const text=['directions','review'].includes(data.scenes[data.activeScene].kind)?data.script.replace(/[\[\]]/g,''):lines[data.index]?.text;if(text){pause();speak(text);}};
 function toggleHide(){data.hide=!data.hide;render();}$('reveal-line').onclick=toggleHide;$('hide-toggle').onclick=toggleHide;

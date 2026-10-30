@@ -2,13 +2,14 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');const vm=require('node:vm');
 const elements=new Map();function element(){return {value:'',textContent:'',hidden:false,disabled:false,dataset:{},classList:{toggle(){},add(){},remove(){}},children:[],setAttribute(k,v){this[k]=v},replaceChildren(...els){this.children=els},append(...els){this.children.push(...els)},querySelector(){return this.button||(this.button=element())},showModal(){},close(){},click(){}};}
 const get=id=>{if(!elements.has(id))elements.set(id,element());return elements.get(id)};
-let timer;let recognizer;let spoken=[];
-class Recognition{constructor(){recognizer=this;this.ended=false}start(){this.onstart?.()}stop(){if(this.ended)return;this.ended=true;this.onend?.()}abort(){this.ended=true}}
+const timers=new Map();let timerId=0;let recognizer;let spoken=[];
+const started=[];class Recognition{constructor(){recognizer=this;this.ended=false}start(){started.push(this);this.onstart?.()}stop(){if(this.ended)return;this.ended=true;this.onend?.()}abort(){this.ended=true}}
 class Utterance{constructor(text){this.text=text}}
 const synthesis={cancel(){},getVoices(){return []},addEventListener(){},speak(u){spoken.push(u)}};
-const ctx={console,document:{getElementById:get,querySelectorAll(){return []},createElement:element,body:{classList:{add(){},remove(){}}},addEventListener(){}},localStorage:{getItem(){return null},setItem(){}},navigator:{},window:{SpeechRecognition:Recognition,speechSynthesis:synthesis,scrollTo(){},addEventListener(){}},SpeechSynthesisUtterance:Utterance,setTimeout(fn){timer=fn;return 1},clearTimeout(){timer=null},Blob,URL};
+const ctx={console,document:{getElementById:get,querySelectorAll(){return []},createElement:element,body:{classList:{add(){},remove(){}}},addEventListener(){}},localStorage:{getItem(){return null},setItem(){}},navigator:{},window:{SpeechRecognition:Recognition,speechSynthesis:synthesis,scrollTo(){},addEventListener(){}},SpeechSynthesisUtterance:Utterance,setTimeout(fn,ms=0){timers.set(++timerId,{fn,ms});return timerId},clearTimeout(id){timers.delete(id)},Blob,URL};
 ctx.window.window=ctx.window;vm.createContext(ctx);vm.runInContext(fs.readFileSync('dist/core.js','utf8'),ctx);ctx.CueCore=ctx.window.CueCore;vm.runInContext(fs.readFileSync('dist/pdf-import.js','utf8'),ctx);ctx.CuePdf=ctx.window.CuePdf;vm.runInContext(fs.readFileSync('dist/app.js','utf8'),ctx);vm.runInContext('data.autoMic=false',ctx);
-function index(){return vm.runInContext('data.index',ctx)}function flush(){const t=timer;timer=null;t?.()}
+function index(){return vm.runInContext('data.index',ctx)}// flush() runs the short app timers (advance, retry); watchdog() runs the long listening watchdogs.
+function runTimers(test){for(const [id,t] of [...timers])if(timers.has(id)&&test(t.ms)){timers.delete(id);t.fn();}}function flush(){runTimers(ms=>ms<2000)}function watchdog(){runTimers(ms=>ms>=2000)}
 function result(text,final=true){const r=[{transcript:text}];r.isFinal=final;const active=recognizer;active.onresult({results:[r]});if(final&&!active.ended)active.stop();}
 assert.equal(index(),0);get('typed').value='I thought you were here';get('typed-form').onsubmit({preventDefault(){}});flush();assert.equal(index(),0,'Wrong line must not advance');
 get('typed').value='I thought you might still be here';get('typed-form').onsubmit({preventDefault(){}});flush();assert.equal(index(),1,'Correct typed line advances once');
@@ -84,3 +85,16 @@ const paginationElements=new Map();const paginationCtx={...ctx,localStorage:{get
 assert.equal(paginationElements.get('current-line').textContent,'Никакой водки!');assert.equal(paginationElements.get('stage-direction').textContent,'Stage direction\nСтук в дверь.');assert.equal(paginationElements.get('role').value,'Светлана');assert.equal(vm.runInContext('data.index',paginationCtx),1);assert(!paginationElements.get('script-input').value.includes('35./59.'));
 paginationElements.get('typed').value='Никакой водки';paginationElements.get('typed-form').onsubmit({preventDefault(){}});flush();assert.equal(vm.runInContext('data.index',paginationCtx),2,'The spoken phrase is accepted without saying the footer');
 console.log('Saved-play pagination repair passed: current role/progress preserved, clean display and editor, direction retained, and correct phrase accepted.');
+// Lena's iPhone reports: late mic prompt, stretched words, and a mic that stays on without hearing anything.
+get('cast-input').value='';get('script-input').value='СЦЕНА 1\nСЕРГЕЙ: Ну что?\nСВЕТЛАНА: Ну-у, как нормально?\nСЕРГЕЙ: Ладно.\nСВЕТЛАНА: Всё уже решено, понимаешь.\nСЕРГЕЙ: Хорошо.\nСВЕТЛАНА: Н-нет, да-а-а, пока.';get('save-script').onclick();
+get('role').value='СВЕТЛАНА';get('role').onchange({target:get('role')});vm.runInContext('data.autoMic=true;micReady=false',ctx);
+let spokenBefore=spoken.length,startedBefore=started.length;get('start').onclick();assert.equal(started.length,startedBefore+1,'Start opens the mic during the tap, before the partner speaks');assert.equal(started.at(-1).ended,true,'The permission check closes the mic again');assert.equal(spoken.length,spokenBefore+1);assert.equal(spoken.at(-1).text,'Ну что?','The partner cue plays after the permission check');
+spoken.at(-1).onend();assert.equal(index(),1);result('Ну как нормально');flush();assert.equal(index(),2,'«Ну-у» is heard as «ну»');
+spoken.at(-1).onend();result('Все уже');flush();assert.equal(index(),3);result('Все уже решено понимаешь');flush();assert.equal(index(),4,'Starting the line over after a good start is accepted');
+spoken.at(-1).onend();const deaf=recognizer;watchdog();assert.equal(deaf.ended,true,'A session that hears nothing is stopped');flush();assert.notEqual(recognizer,deaf,'…and listening starts again with a fresh session');
+const quiet=recognizer;quiet.onresult({results:[Object.assign([{transcript:'Нет да пока'}],{isFinal:false})]});watchdog();assert.equal(quiet.ended,true);flush();assert.equal(index(),6,'Speech that iOS never marks final still counts');
+get('restart').onclick();vm.runInContext('micReady=false',ctx);const realStart=Recognition.prototype.start;Recognition.prototype.start=function(){started.push(this);this.onerror?.({error:'not-allowed'});this.onend?.()};spokenBefore=spoken.length;get('start').onclick();Recognition.prototype.start=realStart;
+assert.equal(spoken.length,spokenBefore,'A refused mic stops before the partner speaks');assert.equal(vm.runInContext('running',ctx),false);assert(get('feedback').textContent.includes('Allow the microphone'));
+assert.equal(ctx.CueCore.matches('Мне кажется, это совершенно нормально сейчас','мне кажется это совершенно нормальна сейчас'),true,'A long line forgives one misheard ending');assert.equal(ctx.CueCore.matches('I thought you might still be here','I thought you were here'),false,'Forgiveness does not accept a different line');
+console.log('Speech fixes passed: mic permission on Start, stretched and stammered words, restarting a line, stuck sessions, interim-only results, and near-miss matching.');
+
