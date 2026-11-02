@@ -27,12 +27,25 @@
   function editDistance(a,b,same=(x,y)=>x===y){let prev=Array.from({length:b.length+1},(_,j)=>j);for(let i=1;i<=a.length;i++){const row=[i];for(let j=1;j<=b.length;j++)row[j]=Math.min(prev[j]+1,row[j-1]+1,prev[j-1]+(same(a[i-1],b[j-1])?0:1));prev=row;}return prev[b.length];}
   // Recognition often misses an ending («нормальна») or splits a word («все таки»), so long lines forgive a little.
   function closeWords(a,b){return a===b||(Math.min(a.length,b.length)>=4&&editDistance(a,b)<=1);}
-  function matches(expected,actual){const a=normalize(expected),b=normalize(actual);if(!a||!b)return false;if(a===b||a.replace(/ /g,'')===b.replace(/ /g,''))return true;const words=a.split(' ');return editDistance(words,b.split(' '),closeWords)<=Math.floor(words.length/5);}
+  // Unusual word forms («перегарищем») often come back as a plainer form of the same word («перегаром»): same start, different ending. That counts as half a mistake.
+  function sameStem(a,b){const n=Math.min(a.length,b.length);if(n<5)return false;let p=0;while(p<n&&a[p]===b[p])p++;return p>=5&&p>=0.6*n;}
+  function wordCost(a,b){return closeWords(a,b)?0:sameStem(a,b)?0.5:1;}
+  // Hyphenated particles («перегарищем-то», «дай-ка», «всё-таки») are often dropped or glued on by recognition, so a line also matches without them.
+  const PARTICLE=/[-‐‑](?:то|ка|таки|де)(?!\p{L})/giu,PARTICLE_WORDS=new Set(['то','ка','таки','де']);
+  function withoutParticles(text){return text.replace(PARTICLE,'');}
+  function weightedDistance(a,b){let prev=Array.from({length:b.length+1},(_,j)=>j);for(let i=1;i<=a.length;i++){const row=[i];for(let j=1;j<=b.length;j++)row[j]=Math.min(prev[j]+1,row[j-1]+1,prev[j-1]+wordCost(a[i-1],b[j-1]));prev=row;}return prev[b.length];}
+  function matchesNormalized(a,b){if(!a||!b)return false;const ja=a.replace(/ /g,''),jb=b.replace(/ /g,'');if(a===b||ja===jb)return true;
+    // Words split or glued differently («перегар ищем»), plus a letter or two misheard: compare the letters, about one slip per ten.
+    if(editDistance(ja,jb)<=Math.floor(ja.length/10))return true;
+    const words=a.split(' ');return weightedDistance(words,b.split(' '))<=words.length/5;}
+  function matches(expected,actual){const b=normalize(actual);const variants=[...new Set([normalize(expected),normalize(withoutParticles(expected))])];return variants.some(a=>matchesNormalized(a,b))||(variants.length>1&&matchesNormalized(variants[1],normalize(withoutParticles(actual))));}
   // Word-by-word comparison for feedback (a substitution costs more than one skip, so matching words line up): same, missing (not said), extra (said, not in the line), changed (said something else).
   function diffWords(expected,actual){
-    const want=expected.split(/\s+/).map(word=>({word,key:normalize(word)})).filter(w=>w.key),got=normalize(actual).split(' ').filter(Boolean);
+    const want=expected.split(/\s+/).map(word=>({word,key:normalize(word),bare:normalize(withoutParticles(word))})).filter(w=>w.key);let got=normalize(actual).split(' ').filter(Boolean);
+    // «перегарищем то» heard as two words is one word of the line: glue a particle back on when the line has one.
+    if(want.some(w=>w.key!==w.bare))got=got.reduce((out,w)=>{if(out.length&&PARTICLE_WORDS.has(w))out[out.length-1]+=' '+w;else out.push(w);return out;},[]);
     const cost=Array.from({length:want.length+1},(_,i)=>Array.from({length:got.length+1},(_,j)=>i+j));
-    const same=(i,j)=>want[i].key.split(' ').join('')===got[j]||closeWords(want[i].key,got[j]);
+    const same=(i,j)=>{const w=want[i],g=got[j],gBare=g.split(' ').filter(x=>!PARTICLE_WORDS.has(x)).join(' ');return w.key.split(' ').join('')===g.split(' ').join('')||wordCost(w.bare,gBare||g)<1;};
     for(let i=1;i<=want.length;i++)for(let j=1;j<=got.length;j++)cost[i][j]=Math.min(cost[i-1][j]+1,cost[i][j-1]+1,cost[i-1][j-1]+(same(i-1,j-1)?0:1.5));
     const ops=[];let i=want.length,j=got.length;
     while(i||j){
