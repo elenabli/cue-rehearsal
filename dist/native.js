@@ -3,8 +3,10 @@
 // On the web it does nothing.
 (function(root){
   const cap=root.Capacitor;
-  if(!cap||!cap.isNativePlatform||!cap.isNativePlatform()||!cap.registerPlugin)return;
-  const Cue=cap.registerPlugin('CueSpeech');
+  // registerPlugin comes from vendor/capacitor/capacitor.js (Capacitor's core), which must load before this file.
+  const register=cap&&(cap.registerPlugin||(root.capacitorExports&&root.capacitorExports.registerPlugin));
+  if(!cap||!cap.isNativePlatform||!cap.isNativePlatform()||!register)return;
+  const Cue=register('CueSpeech');
   let seq=0;const sessions=new Map(),utterances=new Map();
   // Speech log for Settings: what the native recognizer did and what the page saw (no audio, no words).
   const logLines=[];const t0=Date.now();const note=line=>{logLines.push(line);if(logLines.length>600)logLines.splice(0,logLines.length-600);};
