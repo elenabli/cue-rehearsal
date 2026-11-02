@@ -72,3 +72,12 @@ body.rehearsing .stage-line{font-size:30px}
 .live-tag{font-family:'PT Mono',ui-monospace,monospace;font-weight:400;border-radius:3px}
 .stage-card[data-turn=listening] .live-tag{background:#fff;color:var(--ink);border-color:var(--ink)}
 .stage-card[data-turn=listening] .live-tag::first-letter{color:#e23b2e}
+/* Sides hint: a hidden line is a row of typed blanks; hints and spoken words fill it in */
+#hint-text{display:block;font:26px/1.45 'PT Mono',ui-monospace,monospace;color:var(--ink);font-style:normal;margin-top:6px}
+body.rehearsing #hint-text{font-size:30px}
+@media(min-width:651px){body.rehearsing #hint-text{font-size:34px}}
+#hint-text .blank{color:#bdbdb9}
+#hint-text .heard{background:var(--marker);box-shadow:0 0 0 2px var(--marker)}
+body.rehearsing .hint-button:not([hidden]){font-family:'PT Mono',ui-monospace,monospace;font-weight:400;color:var(--ink);text-decoration:underline 1px;text-underline-offset:4px}
+.hint-menu{border-radius:6px;box-shadow:4px 4px 0 #ecece8,4px 4px 0 1px var(--line)}
+.hint-menu button{font-family:'PT Mono',ui-monospace,monospace;border-radius:6px}
