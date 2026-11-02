@@ -78,16 +78,20 @@ function check(transcripts){const l=lines[data.index];if(!l||l.speaker!==data.ro
 // Mark what didn't match so an actor can tell a forgotten word from a misheard one. Hidden lines show blanks, not the missing words.
 function showMismatch(expected,transcripts){const heard=transcripts.filter(t=>t&&t.trim());const prompt=data.hide?(running?' Tap Hint for the first words.':' Reveal the line if you need a prompt.'):'';
  const ops=heard.map(t=>CueCore.diffWords(expected,t)).sort((a,b)=>a.filter(o=>o.type!=='same').length-b.filter(o=>o.type!=='same').length)[0]||[];
- if(!ops.some(o=>o.type==='same')){feedback(`Not quite — stay with this line.\nHeard: “${heard[0]||'…'}”\nTry the whole line again.${prompt}`,true);return;}
+ if(!ops.some(o=>o.type==='same')){feedback(`Not quite — stay with this line.\nHeard: “${heard[0]||'…'}”\nTry the whole line again.${prompt}`,true);if(running)$('feedback').append(countItButton());mismatchShown=true;return;}
  const words=ops.map(o=>{const el=document.createElement(o.type==='extra'?'s':'span');el.className='diff-'+o.type;if(o.type==='extra')el.textContent=o.actual;else{el.textContent=o.type!=='same'&&data.hide?'____':o.expected;if(o.type==='changed'){const said=document.createElement('s');said.textContent=o.actual;el.append(' ',said);}}return el;});
  const line=document.createElement('p');line.className='diff-line';for(const el of words)line.append(el,' ');const head=document.createElement('b');head.textContent='Not quite — stay with this line.';const legend=document.createElement('small');legend.textContent='Underlined: missed. Struck through: heard instead.'+prompt;
- feedback('',true);$('feedback').replaceChildren(head,line,legend);mismatchShown=true;}
+ feedback('',true);$('feedback').replaceChildren(head,line,legend);if(running)$('feedback').append(countItButton());mismatchShown=true;}
+// Recognition sometimes can't hear a word right however clearly it's said («разит» → «рящий тормозит»). The actor knows they said it: let them count it and go on.
+function countItButton(){const b=document.createElement('button');b.className='count-it';b.type='button';b.textContent='I said it right ✓ Count it';b.onclick=()=>{const l=lines[data.index];if(!running||!l||l.speaker!==data.role||pendingAdvance)return;stopAudio();feedback();advance();};return b;}
 // Safari asks for the microphone the first time recognition starts. When a partner speaks first, that would be after their cue, so open and close the mic during the Start tap instead.
 function askForMic(then){const l=lines[data.index];if(!Recognition||micReady||!data.autoMic||!l||l.speaker===data.role||!lines.some(x=>x.speaker===data.role)){then();return;}
  const token=runId,rec=new Recognition();primer=rec;let done=false;const go=()=>{if(done)return;done=true;if(primer===rec)primer=null;rec.onstart=rec.onend=rec.onerror=null;try{rec.abort();}catch{}if(token===runId&&running)then();};
  rec.lang=data.language;rec.onstart=()=>{micReady=true;go();};rec.onerror=e=>{if(['not-allowed','service-not-allowed'].includes(e.error)&&token===runId){done=true;primer=null;running=false;render();feedback('Allow the microphone for this site in Safari settings, then tap Start.',true);return;}go();};rec.onend=go;
  try{rec.start();}catch{go();}}
 // Start the next session only once the last one has really ended: on iOS a session started while the old one still holds the mic can't hear anything.
+// iOS often goes deaf when listening restarts straight after a heard attempt, but listening after the partner's voice works. So after a wrong attempt the partner gives the cue again (or says «Ещё раз» on a first line), then the mic opens.
+function cueAgain(then){const l=lines[data.index],cue=data.index>0&&lines[data.index-1].speaker!==data.role?lines[data.index-1].text:'';const lang=data.language.split('-')[0];const text=cue||({ru:'Ещё раз.',uk:'Ще раз.',en:'Again.'}[lang]||'');if(!l||!text||!speak(text,then))then();}
 function startWhenFree(go,waited=0){const last=lastSession;if(!last||last.ended||waited>=1500){go();return;}const token=runId;retryTimer=setTimeout(()=>{if(token===runId)startWhenFree(go,waited+150);},150);}
 function listen(automatic=false){
  if(!Recognition){feedback('Voice input isn’t available here. Open the app in Safari, or type your line.',true);return;}
@@ -117,11 +121,12 @@ function listen(automatic=false){
   // iOS sometimes ends a session without marking anything final; what it heard is still the actor's line.
   if(!finals.length&&interim.trim())finals=[[interim.trim()]];
   if(deaf){deafRetries++;if(deafRetries>=2||!data.autoMic||!running){render();feedback('The microphone stopped hearing. Tap Speak to go on.',true);return;}render();retryTimer=setTimeout(()=>startWhenFree(()=>{if(token===runId&&lineIndex===data.index&&running)listen(true);}),800);return;}
+  let wrong=false;
   if(!failed&&finals.length){silenceRetries=0;const candidates=candidatesFor(finals);
    if(candidates.some(text=>CueCore.matches(lines[lineIndex].text,text)))check(candidates);
-   else{const expected=CueCore.normalize(lines[lineIndex].text);const prefix=candidates.filter(text=>{const value=CueCore.normalize(text);return value&&expected.startsWith(value+' ');}).sort((a,b)=>b.length-a.length)[0];if(prefix){partialSpeech=prefix;feedback('Good start. Carry on from where you stopped.');}else{partialSpeech='';check(candidates);}}
+   else{const expected=CueCore.normalize(lines[lineIndex].text);const prefix=candidates.filter(text=>{const value=CueCore.normalize(text);return value&&expected.startsWith(value+' ');}).sort((a,b)=>b.length-a.length)[0];if(prefix){partialSpeech=prefix;feedback('Good start. Carry on from where you stopped.');}else{partialSpeech='';check(candidates);wrong=!pendingAdvance;}}
   }else if(retryAllowed){silenceRetries++;if(!failed)feedback('Didn’t hear the whole line. Please say it again.',true);}
-  render();if(running&&data.autoMic&&!pendingAdvance&&retryAllowed){if(silenceRetries>=3){running=false;render();feedback('I can’t hear you. Tap Speak when you’re ready to go on.',true);}else retryTimer=setTimeout(()=>startWhenFree(()=>{if(token===runId&&lineIndex===data.index&&running)listen(true);}),600);}
+  render();if(running&&data.autoMic&&!pendingAdvance&&retryAllowed){if(silenceRetries>=3){running=false;render();feedback('I can’t hear you. Tap Speak when you’re ready to go on.',true);}else{const again=()=>{if(token===runId&&lineIndex===data.index&&running)listen(true);};retryTimer=setTimeout(()=>startWhenFree(()=>{if(token!==runId||lineIndex!==data.index||!running)return;if(wrong)cueAgain(again);else again();}),600);}}
  };rec.onend=finish;
  try{rec.start();render();}catch{recognition=null;running=false;document.body.classList.remove('listening');feedback('Safari needs a tap to continue. Tap Speak.',true);render();}
 }
