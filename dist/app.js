@@ -116,10 +116,14 @@ function listen(automatic=false){
   feedback('Listening…\n“'+[partialSpeech,...finals.map(r=>r[0]),interim].filter(Boolean).join(' ')+'”');
   if(finals.length&&candidatesFor(finals).some(text=>CueCore.matches(lines[lineIndex].text,text)))rec.stop();
  };
- rec.onerror=e=>{if(token!==runId)return;failed=true;retryAllowed=e.error==='no-speech';if(!retryAllowed){running=false;partialSpeech='';}
+ rec.onerror=e=>{if(token!==runId)return;failed=true;
+  // In the iPhone app a microphone or service hiccup is retried with a fresh session instead of stopping the rehearsal.
+  const recoverable=window.CueNative&&['audio-capture','network','service'].includes(e.error);
+  retryAllowed=e.error==='no-speech'||recoverable;if(!retryAllowed){running=false;partialSpeech='';}
+  if(recoverable){feedback('Restarting the microphone…');return;}
   const messages={'not-allowed':'Allow the microphone for this site in Safari settings, then tap Speak.','service-not-allowed':'Safari blocked automatic listening. Tap Speak, or type your line.','audio-capture':'The microphone isn’t available. Check it, then tap Speak.','network':'Check your internet connection, then tap Speak.','no-speech':'Didn’t catch that. Try again.','aborted':'Listening stopped. Tap Speak.'};feedback(messages[e.error]||'Couldn’t recognize speech. Tap Speak to try again.',true);
  };
- const finish=()=>{if(ended||recognition!==rec)return;ended=true;if(!deaf&&rec.onend===finish)session.ended=true;recognition=null;clearTimeout(watchdog);document.body.classList.remove('listening');if(token!==runId||lineIndex!==data.index)return;
+ const finish=()=>{if(ended||recognition!==rec)return;ended=true;window.CueSpeechLog?.note(`finish line ${lineIndex+1}: ${failed?'failed':finals.length?'heard':interim?'interim':'nothing'}`);if(!deaf&&rec.onend===finish)session.ended=true;recognition=null;clearTimeout(watchdog);document.body.classList.remove('listening');if(token!==runId||lineIndex!==data.index)return;
   // iOS sometimes ends a session without marking anything final; what it heard is still the actor's line.
   if(!finals.length&&interim.trim())finals=[[interim.trim()]];
   if(deaf){deafRetries++;if(deafRetries>=2||!data.autoMic||!running){render();feedback('The microphone stopped hearing. Tap Speak to go on.',true);return;}render();retryTimer=setTimeout(()=>startWhenFree(()=>{if(token===runId&&lineIndex===data.index&&running)listen(true);}),800);return;}
@@ -175,6 +179,8 @@ $('save-script').onclick=()=>{try{
  }catch(e){$('script-message').textContent=e.message;}};
 function selectScene(next){if(!Number.isInteger(next)||!data.scenes[next]||next===data.activeScene)return;pause();data.activeScene=next;data.script=data.scenes[next].script;lines=sceneLines(data.scenes[next]);data.index=Math.max(0,Math.min(data.scenes[next].index||0,lines.length));feedback();$('typed').value='';render();}
 $('scene-picker').onchange=e=>selectScene(Number(e.target.value));
+// iPhone app only: the speech log helps diagnose listening problems on the device.
+if(window.CueNative&&window.CueSpeechLog){$('speech-log-panel').hidden=false;$('copy-speech-log').onclick=()=>{const text=window.CueSpeechLog.lines().join('\n')||'(empty)';const box=$('speech-log');box.hidden=false;box.value=text;const done=ok=>{$('speech-log-message').textContent=ok?'Copied. Paste it into a message.':'Select the text below and copy it.';};try{navigator.clipboard.writeText(text).then(()=>done(true),()=>{box.select?.();done(false);});}catch{box.select?.();done(false);}};}
 $('reset-progress').onclick=()=>{if(window.confirm&&!window.confirm('Start every scene from its first line?'))return;pause();for(const scene of data.scenes)scene.index=0;data.index=0;feedback();$('typed').value='';render();$('reset-message').textContent='Every scene starts from the first line again.';};
 $('file-input').onchange=async e=>{const file=e.target.files[0];if(!file)return;if(file.size>500000){$('script-message').textContent='Please use a text file smaller than 500 KB.';return;}$('script-input').value=await file.text();$('cast-input').value=CuePdf.extractCast($('script-input').value).join('\n');if(!$('title-input').value.trim())$('title-input').value=file.name.replace(/\.txt$/i,'');e.target.value='';};
 $('export-script').onclick=()=>{const blob=new Blob([$('script-input').value],{type:'text/plain;charset=utf-8'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=($('title-input').value||'scene')+'.txt';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
