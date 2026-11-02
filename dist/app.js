@@ -101,6 +101,8 @@ function listen(automatic=false){
  deafRetries=automatic?deafRetries:0;
  if(!running&&!automatic)running=true;
  clearTimeout(retryTimer);const rec=new Recognition();recognition=rec;const session={rec,ended:false};lastSession=session;rec.lang=data.language;rec.interimResults=true;rec.continuous=false;rec.maxAlternatives=5;
+ // The iPhone app's recognizer can be told which words to expect, which helps with rare forms («перегарищем»).
+ if('phrases' in rec){const words=lines[data.index].text.split(/\s+/).map(w=>w.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu,'')).filter(Boolean);rec.phrases=[...new Set([lines[data.index].text,...words])];}
  const token=runId,lineIndex=data.index;heard={key:'',count:0};let finals=[],interim='',failed=false,retryAllowed=true,ended=false,watchdog=null,audio=false,deaf=false;
  const candidatesFor=rows=>{let combined=[partialSpeech],fresh=[''];for(const row of rows){combined=combined.flatMap(prefix=>row.map(text=>(prefix+' '+text).trim())).slice(0,25);fresh=fresh.flatMap(prefix=>row.map(text=>(prefix+' '+text).trim())).slice(0,25);}return [...new Set(partialSpeech?[...combined,...fresh]:combined)];};
  // iOS Safari can keep a session open without ever reporting results, which left the mic on but deaf. Stop a quiet session, and drop it if it won't stop.
@@ -126,7 +128,7 @@ function listen(automatic=false){
    if(candidates.some(text=>CueCore.matches(lines[lineIndex].text,text)))check(candidates);
    else{const expected=CueCore.normalize(lines[lineIndex].text);const prefix=candidates.filter(text=>{const value=CueCore.normalize(text);return value&&expected.startsWith(value+' ');}).sort((a,b)=>b.length-a.length)[0];if(prefix){partialSpeech=prefix;feedback('Good start. Carry on from where you stopped.');}else{partialSpeech='';check(candidates);wrong=!pendingAdvance;}}
   }else if(retryAllowed){silenceRetries++;if(!failed)feedback('Didn’t hear the whole line. Please say it again.',true);}
-  render();if(running&&data.autoMic&&!pendingAdvance&&retryAllowed){if(silenceRetries>=3){running=false;render();feedback('I can’t hear you. Tap Speak when you’re ready to go on.',true);}else{const again=()=>{if(token===runId&&lineIndex===data.index&&running)listen(true);};retryTimer=setTimeout(()=>startWhenFree(()=>{if(token!==runId||lineIndex!==data.index||!running)return;if(wrong)cueAgain(again);else again();}),600);}}
+  render();if(running&&data.autoMic&&!pendingAdvance&&retryAllowed){if(silenceRetries>=3){running=false;render();feedback('I can’t hear you. Tap Speak when you’re ready to go on.',true);}else{const again=()=>{if(token===runId&&lineIndex===data.index&&running)listen(true);};retryTimer=setTimeout(()=>startWhenFree(()=>{if(token!==runId||lineIndex!==data.index||!running)return;if(wrong&&!window.CueNative)cueAgain(again);else again();}),600);}}
  };rec.onend=finish;
  try{rec.start();render();}catch{recognition=null;running=false;document.body.classList.remove('listening');feedback('Safari needs a tap to continue. Tap Speak.',true);render();}
 }
