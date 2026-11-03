@@ -29,7 +29,7 @@ const plan=['Господи как разит','Господи перегари�
 get('start').onclick();L('state',st());
 let step=0;const iv=setInterval(()=>{if(current&&!current.heard&&!current.planned&&step<plan.length){current.planned=true;const text=plan[step++];setTimeout(()=>speakInto(current.id,text),400);}},50);
 setTimeout(()=>{clearInterval(iv);const text=log.join('\n');
- try{assert.equal(vm.runInContext('data.index',ctx),4,'The scene finishes');assert(/r2 error audio-capture/.test(text),'The deaf session reported a microphone failure');assert(/native start r3/.test(text),'…and a fresh session replaced it');assert.equal(log.filter(l=>l.includes('native speak')).length,2,'Both partner cues were spoken');
+ try{assert.equal(vm.runInContext('data.index',ctx),4,'The scene finishes');assert(/r2 error audio-capture/.test(text),'The deaf session reported a microphone failure');assert(/native start r3/.test(text),'…and a fresh session replaced it');const spoken=log.filter(l=>l.includes('native speak'));assert.equal(spoken.length,3,'Both partner cues, then the end of scene, were spoken');assert(spoken[2].includes('Конец сцены.'),'The end of the scene is announced: '+spoken[2]);
  const lines=win.CueSpeechLog.lines().join('\n');assert(/r2 error audio-capture \(no microphone audio\)/.test(lines),'The speech log names the failure');assert(!/перегарищем/.test(lines),'The speech log holds no words');}
  catch(e){console.log(text);throw e;}
  console.log('Native rehearsal flow passed: wrong attempt, deaf session recovery, partner cues, scene completion, and a word-free speech log.');process.exit(0)},12500);
