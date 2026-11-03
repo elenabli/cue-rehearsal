@@ -58,7 +58,23 @@ Scanned PDFs need text recognition (OCR) in a PDF app before import. Review extr
 
 PDF extraction happens on your device. Scripts, the selected character, and progress for each scene are saved in that browser. They do not sync between devices; clearing website data removes them. Use **Export whole play** to keep a copy of the script.
 
-Speech input uses the browser’s Web Speech service (on iPhone, see [iPhone app](#iphone-app)). It needs microphone permission and may require an internet connection. Audio may be processed by the browser vendor’s speech service, and recognition can mishear spoken lines. After an initial visit, the app is cached for offline reading; speech input may still need a connection.
+Speech input uses the browser’s Web Speech service. It needs microphone permission and may require an internet connection. Audio may be processed by the browser vendor’s speech service, and recognition can mishear spoken lines. After an initial visit, the app is cached for offline reading; speech input may still need a connection.
+
+## Speech on iPhone: what went wrong, and what we learned
+
+For a while, rehearsing in iPhone Safari kept breaking. After a missed line, Cue stopped hearing you: the microphone stayed on but no words came back. The partner voice also went silent after a few lines, so the scene stalled.
+
+**We first blamed Safari.** A known WebKit report ([WebAudio/web-speech-api#96](https://github.com/WebAudio/web-speech-api/issues/96)) describes iOS recognition failing silently after its first result. Several web workarounds didn't help on the phone, so we built a native iPhone app that used Apple's own speech framework (#9). It worked on the phone. We later removed it (#11) to keep Cue a single web app.
+
+**A test showed the problem was Cue's own code.** A small Safari test page (#14) ran on the same iPhone. It heard five rounds in a row, both with a new recognition session each round and with one reused session, and it spoke every cue. The app differed from that page in three ways:
+
+- It cancelled speech synthesis before every partner line. On iOS, this can make the next line disappear.
+- It aborted recognition sessions: a microphone check at Start, a watchdog that killed "deaf" sessions, and an abort when you tapped Speak. Aborting leaves Safari's recognizer in a bad state.
+- It started a new session before the old one had fully ended.
+
+Ironically, some of these were workarounds added to fix the problem. #18 removes them. Speech is cancelled only when something is actually playing, sessions are stopped instead of aborted, and a new session starts only after the old one has ended.
+
+**One real limit remains.** Safari's recognizer can't be told which words to expect, so rare or unusual words can still be misheard. For example, «Господи, перегарищем-то разит!» once came back as «…рящий тормозит». The speech lab page (#12, #17) compares other speech-to-text services for this case.
 
 ## Development
 
