@@ -103,6 +103,7 @@ public class CueSpeechPlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizerDe
         let type = raw.flatMap { AVAudioSession.InterruptionType(rawValue: $0) }
         DispatchQueue.main.async {
             self.log("audio interruption \(type == .began ? "began" : "ended")")
+            if type == .began { self.audioActive = false }
             if type == .began, let s = self.session { self.fail(s, "audio-capture", "interrupted") }
         }
     }
@@ -113,9 +114,16 @@ public class CueSpeechPlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizerDe
         DispatchQueue.main.async { self.log("route change \(reason), inputs: \(inputs)") }
     }
 
+    /// Activating the audio session blocks briefly (Xcode warns about it on the main thread), so it is done
+    /// once and again only after an interruption, not before every line and cue.
+    private var audioActive = false
+
     private func activateAudio() -> Bool {
+        if audioActive { return true }
         do {
             try AVAudioSession.sharedInstance().setActive(true)
+            audioActive = true
+            log("audio session active")
             return true
         } catch {
             log("audio activate failed: \(describe(error))")
