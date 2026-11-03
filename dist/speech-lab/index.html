@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Cue speech lab</title>
+<link rel="icon" href="../icon.svg" type="image/svg+xml">
+<style>
+:root{--paper:#fffdf7;--ink:#1d1d1b;--muted:#6d6a62;--line:#e6e1d3;--hl:#ffe45c;--ok:#1d7a46;--bad:#b3261e;--card:#fff}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+main{max-width:760px;margin:0 auto;padding:16px 16px 80px}
+h1{font:700 26px/1.2 "Courier New",Courier,monospace;margin:8px 0 4px}
+h2{font:700 18px/1.3 "Courier New",Courier,monospace;margin:28px 0 8px}
+p.lead,.muted{color:var(--muted)}
+section{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin:12px 0}
+label{display:block;font-weight:600;margin:10px 0 4px}
+input[type=text],input[type=password],select,textarea{width:100%;font:inherit;padding:10px;border:1px solid var(--line);border-radius:8px;background:#fff}
+textarea{min-height:64px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.check{display:flex;gap:8px;align-items:flex-start;font-weight:400;margin:8px 0}
+.check input{margin-top:4px;width:20px;height:20px}
+.check small{display:block;color:var(--muted)}
+button{font:inherit;border-radius:999px;border:1px solid var(--ink);background:#fff;color:var(--ink);padding:10px 16px;cursor:pointer}
+button.primary{background:var(--ink);color:#fff}
+button:disabled{opacity:.4}
+#rec{font-size:20px;padding:16px 28px;min-width:200px}
+#rec.on{background:var(--bad);border-color:var(--bad)}
+.lines{list-style:none;padding:0;margin:0}
+.lines li{font-family:"Courier New",Courier,monospace;padding:10px;border-bottom:1px solid var(--line);cursor:pointer}
+.lines li.sel{background:linear-gradient(transparent 15%,var(--hl) 15%,var(--hl) 85%,transparent 85%)}
+.expected{font:700 18px/1.4 "Courier New",Courier,monospace;margin:8px 0}
+.meter{height:8px;background:var(--line);border-radius:4px;overflow:hidden;margin:10px 0}
+.meter i{display:block;height:100%;width:0;background:var(--ok);transition:width .05s}
+table{width:100%;border-collapse:collapse;font-size:14px}
+td,th{text-align:left;padding:8px 6px;border-bottom:1px solid var(--line);vertical-align:top}
+.ok{color:var(--ok);font-weight:700}.bad{color:var(--bad);font-weight:700}
+.err{color:var(--bad)}
+.heard{font-family:"Courier New",Courier,monospace}
+.attempt{border-top:2px solid var(--ink);padding-top:8px;margin-top:16px}
+.small{font-size:13px}
+details summary{cursor:pointer;font-weight:600}
+</style></head>
+<body><main>
+<h1>Cue speech lab</h1>
+<p class="lead">Say a line once. The same recording goes to every service you switch on, and you see what each one heard, whether Cue would accept it, and how long it took.</p>
+
+<section id="keys-section">
+<details id="keys-details"><summary>1. Services and keys</summary>
+<p class="muted small">Keys are saved only in this browser on this phone. Your recording goes straight from the phone to each service you switch on. Nothing goes to Cue or GitHub.</p>
+<div id="engine-list"></div>
+<label for="k-openai">OpenAI API key</label><input id="k-openai" type="password" autocomplete="off" placeholder="sk-...">
+<label for="k-deepgram">Deepgram API key</label><input id="k-deepgram" type="password" autocomplete="off">
+<label for="k-google">Google Cloud API key (Speech-to-Text enabled)</label><input id="k-google" type="password" autocomplete="off">
+<label for="k-azure">Azure Speech key</label><input id="k-azure" type="password" autocomplete="off">
+<label for="k-azure-region">Azure region</label><input id="k-azure-region" type="text" autocomplete="off" placeholder="westeurope">
+<label for="local-model">On-phone Whisper model</label>
+<select id="local-model"><option value="onnx-community/whisper-base">Whisper base (about 80 MB download)</option><option value="onnx-community/whisper-small">Whisper small (about 250 MB, more accurate, slower)</option></select>
+<div class="row" style="margin-top:8px"><button id="load-local">Download on-phone model</button><span id="local-status" class="muted small"></span></div>
+<div class="row" style="margin-top:12px"><button id="save-keys" class="primary">Save</button><button id="forget-keys">Forget all keys</button><span id="keys-msg" class="muted small"></span></div>
+</details>
+</section>
+
+<section>
+<h2 style="margin-top:0">2. Pick a line</h2>
+<ul class="lines" id="lines"></ul>
+<label for="custom">Or type your own line</label>
+<textarea id="custom" placeholder="Any line from your script"></textarea>
+</section>
+
+<section>
+<h2 style="margin-top:0">3. Say it</h2>
+<div class="expected" id="expected"></div>
+<label class="check"><input type="checkbox" id="wrong"><span>I'll say it wrong on purpose<small>Tests whether a service "hears" the right line just because it was told what to expect. A correct result here is a false accept.</small></span></label>
+<label class="check"><input type="checkbox" id="autostop" checked><span>Stop when I stop talking<small>Like the rehearsal: about 1.2 seconds of silence ends the line.</small></span></label>
+<div class="row"><button id="rec" class="primary">● Record</button><button id="play" disabled>▶ Play it back</button></div>
+<div class="meter"><i id="level"></i></div>
+<p id="status" class="muted small" role="status" aria-live="polite"></p>
+</section>
+
+<section>
+<h2 style="margin-top:0">Results</h2>
+<div id="summary"><p class="muted">No attempts yet.</p></div>
+<div class="row" style="margin-top:10px"><button id="copy">Copy results</button><button id="clear">Clear results</button><span id="copy-msg" class="muted small"></span></div>
+<p class="muted small">Copy results gives you text you can paste back to Claude. It has the words each service heard and the timings, no audio and no keys.</p>
+<div id="attempts"></div>
+</section>
+</main>
+<script src="../core.js"></script>
+<script>
+'use strict';
+const LINES=[
+'Господи, перегарищем-то разит!',
+'Какая водка? Ты всю ночь квасил! Хватит уже…',
+'Серёжа, я тебя умоляю, иди в комнату и сиди, как мышь.',
+'А ты чего раскомандовалась? Звание! Номер части?!',
+'Косил до последнего. Плоскостопие искал.',
+'Да куплю-куплю! Иди уже.',
+'Ну так это и было предложение. Отец мой к нему пришёл и предложил. Жениться, или в травматологию.',
+'Расписались, Алинку родили. Шестнадцать лет живём. Жили.',
+'Ну, то тут, то там.',
+'Никто, пап. Никто.'
+];
+// price in USD per minute of audio, checked 2026-11-03
+const ENGINES=[
+ {id:'oa4o',name:'OpenAI gpt-4o-transcribe + line as prompt',key:'openai',price:0.006,def:true},
+ {id:'oa4o-np',name:'OpenAI gpt-4o-transcribe, no prompt',key:'openai',price:0.006,def:true},
+ {id:'oamini',name:'OpenAI gpt-4o-mini-transcribe + prompt',key:'openai',price:0.003,def:true},
+ {id:'oagt',name:'OpenAI gpt-transcribe + prompt',key:'openai',price:0.0045,def:true},
+ {id:'dg',name:'Deepgram Nova-3 (live stream)',key:'deepgram',price:0.0077,def:true},
+ {id:'gg',name:'Google Cloud Speech + line as hint',key:'google',price:0.016,def:true},
+ {id:'az',name:'Azure Speech',key:'azure',price:0.0167,def:true},
+ {id:'local',name:'Whisper on this phone (free, offline)',key:'local',price:0,def:true}
+];
+const $=id=>document.getElementById(id);
+const store={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch{return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch{}}};
+let keys=store.get('cue-lab-keys',{});
+let enabled=store.get('cue-lab-enabled',Object.fromEntries(ENGINES.map(e=>[e.id,e.def])));
+let attempts=store.get('cue-lab-attempts',[]);
+let selected=0;
+
+// ---------- settings ----------
+function renderEngines(){
+ $('engine-list').innerHTML='';
+ for(const e of ENGINES){
+  const l=document.createElement('label');l.className='check';
+  const price=e.price?`$${e.price.toFixed(4)}/min`:'free';
+  l.innerHTML=`<input type="checkbox" data-eng="${e.id}" ${enabled[e.id]?'checked':''}><span>${e.name}<small>${price}${hasKey(e)?'':' · needs a key'}</small></span>`;
+  $('engine-list').appendChild(l);
+ }
+ $('engine-list').querySelectorAll('input').forEach(i=>i.onchange=()=>{enabled[i.dataset.eng]=i.checked;store.set('cue-lab-enabled',enabled)});
+}
+function hasKey(e){if(e.key==='local')return true;if(e.key==='azure')return !!(keys.azure&&keys.azureRegion);return !!keys[e.key]}
+function fillKeys(){$('k-openai').value=keys.openai||'';$('k-deepgram').value=keys.deepgram||'';$('k-google').value=keys.google||'';$('k-azure').value=keys.azure||'';$('k-azure-region').value=keys.azureRegion||'';$('local-model').value=keys.localModel||'onnx-community/whisper-base'}
+$('save-keys').onclick=()=>{keys={openai:$('k-openai').value.trim(),deepgram:$('k-deepgram').value.trim(),google:$('k-google').value.trim(),azure:$('k-azure').value.trim(),azureRegion:$('k-azure-region').value.trim().toLowerCase(),localModel:$('local-model').value};store.set('cue-lab-keys',keys);renderEngines();$('keys-msg').textContent='Saved on this phone.'};
+$('forget-keys').onclick=()=>{keys={};store.set('cue-lab-keys',keys);fillKeys();renderEngines();$('keys-msg').textContent='Keys removed.'};
+if(!keys.openai&&!keys.deepgram&&!keys.google&&!keys.azure)$('keys-details').open=true;
+
+// ---------- lines ----------
+function renderLines(){
+ $('lines').innerHTML='';
+ LINES.forEach((t,i)=>{const li=document.createElement('li');li.textContent=t;if(i===selected&&!$('custom').value.trim())li.className='sel';li.onclick=()=>{selected=i;$('custom').value='';renderLines()};$('lines').appendChild(li)});
+ $('expected').textContent=expectedLine();
+}
+function expectedLine(){return $('custom').value.trim()||LINES[selected]}
+$('custom').oninput=renderLines;
+
+// ---------- recording ----------
+const TARGET=16000;
+let rec=null,lastPcm=null;
+function downsample(buf,rate){if(rate===TARGET)return buf;const ratio=rate/TARGET,len=Math.floor(buf.length/ratio),out=new Float32Array(len);for(let i=0;i<len;i++){const s=Math.floor(i*ratio),e=Math.min(buf.length,Math.floor((i+1)*ratio));let sum=0;for(let j=s;j<e;j++)sum+=buf[j];out[i]=sum/Math.max(1,e-s)}return out}
+function toInt16(f){const o=new Int16Array(f.length);for(let i=0;i<f.length;i++){const s=Math.max(-1,Math.min(1,f[i]));o[i]=s<0?s*0x8000:s*0x7fff}return o}
+function concat(chunks){const n=chunks.reduce((a,c)=>a+c.length,0),o=new Float32Array(n);let p=0;for(const c of chunks){o.set(c,p);p+=c.length}return o}
+function wav(pcm16){const b=new ArrayBuffer(44+pcm16.length*2),v=new DataView(b);const w=(o,s)=>{for(let i=0;i<s.length;i++)v.setUint8(o+i,s.charCodeAt(i))};w(0,'RIFF');v.setUint32(4,36+pcm16.length*2,true);w(8,'WAVE');w(12,'fmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);v.setUint32(24,TARGET,true);v.setUint32(28,TARGET*2,true);v.setUint16(32,2,true);v.setUint16(34,16,true);w(36,'data');v.setUint32(40,pcm16.length*2,true);new Int16Array(b,44).set(pcm16);return new Blob([b],{type:'audio/wav'})}
+function b64(int16){const bytes=new Uint8Array(int16.buffer,int16.byteOffset,int16.byteLength);let s='';for(let i=0;i<bytes.length;i+=0x8000)s+=String.fromCharCode.apply(null,bytes.subarray(i,i+0x8000));return btoa(s)}
+
+async function startRec(){
+ const line=expectedLine();
+ const ctx=new (window.AudioContext||window.webkitAudioContext)();ctx.resume();
+ let stream;
+ try{stream=await navigator.mediaDevices.getUserMedia({audio:{channelCount:1,echoCancellation:true,noiseSuppression:true,autoGainControl:true}})}
+ catch(e){ctx.close();status('Microphone blocked: '+e.message+'. Allow the microphone for this site in Safari and try again.');return}
+ await ctx.resume();
+ const src=ctx.createMediaStreamSource(stream),proc=ctx.createScriptProcessor(4096,1,1);
+ const r={line,stream,ctx,src,proc,chunks:[],started:performance.now(),voiced:false,lastVoice:0,dg:null};
+ if(enabled.dg&&keys.deepgram)r.dg=openDeepgram(line);
+ proc.onaudioprocess=ev=>{
+  const f=new Float32Array(ev.inputBuffer.getChannelData(0));const d=downsample(f,ctx.sampleRate);r.chunks.push(d);
+  if(r.dg)r.dg.send(toInt16(d));
+  let sum=0;for(let i=0;i<f.length;i++)sum+=f[i]*f[i];const rms=Math.sqrt(sum/f.length);
+  $('level').style.width=Math.min(100,rms*600)+'%';
+  const now=performance.now();if(rms>0.02){r.voiced=true;r.lastVoice=now}
+  if($('autostop').checked&&r.voiced&&now-r.lastVoice>1200)stopRec();
+  if(now-r.started>25000)stopRec();
+ };
+ src.connect(proc);proc.connect(ctx.destination);
+ rec=r;$('rec').textContent='■ Stop';$('rec').classList.add('on');status('Listening… say the line.');
+}
+async function stopRec(){
+ if(!rec)return;const r=rec;rec=null;
+ r.stoppedAt=performance.now();
+ r.proc.onaudioprocess=null;try{r.src.disconnect();r.proc.disconnect()}catch{}
+ r.stream.getTracks().forEach(t=>t.stop());r.ctx.close();
+ $('rec').textContent='● Record';$('rec').classList.remove('on');$('level').style.width='0';
+ const pcm=concat(r.chunks);lastPcm=pcm;$('play').disabled=false;
+ const secs=pcm.length/TARGET;
+ if(!r.voiced){status('I heard nothing loud enough. Try again a little closer to the phone.');if(r.dg)r.dg.cancel();return}
+ status('Sending to the services…');
+ await runAll(r,pcm,secs);
+ status('Done. Pick another line or say this one again.');
+}
+$('rec').onclick=()=>rec?stopRec():startRec();
+$('play').onclick=()=>{if(!lastPcm)return;const a=new Audio(URL.createObjectURL(wav(toInt16(lastPcm))));a.play()};
+function status(t){$('status').textContent=t}
+
+// ---------- engines ----------
+async function openaiTranscribe(model,blob,prompt){
+ const fd=new FormData();fd.append('file',blob,'line.wav');fd.append('model',model);fd.append('language','ru');if(prompt)fd.append('prompt',prompt);fd.append('response_format','json');
+ const res=await fetch('https://api.openai.com/v1/audio/transcriptions',{method:'POST',headers:{Authorization:'Bearer '+keys.openai},body:fd});
+ const j=await res.json().catch(()=>({}));if(!res.ok)throw new Error((j.error&&j.error.message)||('HTTP '+res.status));return j.text||'';
+}
+function openDeepgram(line){
+ const q=new URLSearchParams({model:'nova-3',language:'ru',encoding:'linear16',sample_rate:String(TARGET),channels:'1',punctuate:'true',smart_format:'true',interim_results:'false'});
+ const ws=new WebSocket('wss://api.deepgram.com/v1/listen?'+q,['token',keys.deepgram]);
+ ws.binaryType='arraybuffer';
+ const queue=[],finals=[];let err=null,resolveDone,closed=false;
+ const done=new Promise(r=>resolveDone=r);
+ ws.onopen=()=>{while(queue.length)ws.send(queue.shift())};
+ ws.onmessage=ev=>{try{const m=JSON.parse(ev.data);if(m.type==='Results'&&m.is_final){const t=m.channel&&m.channel.alternatives&&m.channel.alternatives[0]&&m.channel.alternatives[0].transcript;if(t)finals.push(t)}if(m.type==='Error'||m.err_msg)err=m.description||m.err_msg}catch{}};
+ ws.onerror=()=>{err=err||'Could not connect (check the key)'};
+ ws.onclose=ev=>{closed=true;if(ev.code!==1000&&!finals.length)err=err||('Closed: '+(ev.reason||ev.code));resolveDone()};
+ return{
+  send(int16){const buf=int16.buffer;if(ws.readyState===1)ws.send(buf);else if(ws.readyState===0)queue.push(buf)},
+  cancel(){try{ws.close()}catch{}},
+  async finish(){
+   const flush=()=>{try{ws.send(JSON.stringify({type:'CloseStream'}))}catch{}};
+   if(ws.readyState===1)flush();else if(ws.readyState===0){const o=ws.onopen;ws.onopen=()=>{o();flush()}}
+   const t=setTimeout(()=>{if(!closed){err=err||'Timed out';try{ws.close()}catch{}}},10000);
+   await done;clearTimeout(t);if(err&&!finals.length)throw new Error(err);return finals.join(' ');
+  }
+ };
+}
+function hintPhrases(line){const words=line.replace(/[^\p{L}\p{N}\s-]/gu,' ').split(/\s+/).filter(Boolean);return [line.replace(/[«»"…!?.,;:]/g,' ').replace(/\s+/g,' ').trim(),...words.filter(w=>w.length>4)].slice(0,50)}
+async function googleTranscribe(pcm16,line){
+ const body={config:{encoding:'LINEAR16',sampleRateHertz:TARGET,languageCode:'ru-RU',enableAutomaticPunctuation:true,speechContexts:[{phrases:hintPhrases(line)}]},audio:{content:b64(pcm16)}};
+ const res=await fetch('https://speech.googleapis.com/v1/speech:recognize?key='+encodeURIComponent(keys.google),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+ const j=await res.json().catch(()=>({}));if(!res.ok)throw new Error((j.error&&j.error.message)||('HTTP '+res.status));
+ return (j.results||[]).map(r=>r.alternatives&&r.alternatives[0]&&r.alternatives[0].transcript||'').join(' ').trim();
+}
+async function azureTranscribe(blob){
+ const url=`https://${keys.azureRegion}.stt.speech.microsoft.com/speech/recognition/conversation/cognitiveservices/v1?language=ru-RU&format=simple`;
+ const res=await fetch(url,{method:'POST',headers:{'Ocp-Apim-Subscription-Key':keys.azure,'Content-Type':'audio/wav; codecs=audio/pcm; samplerate=16000',Accept:'application/json'},body:blob});
+ const j=await res.json().catch(()=>({}));if(!res.ok)throw new Error(j.error&&j.error.message||('HTTP '+res.status));
+ if(j.RecognitionStatus&&j.RecognitionStatus!=='Success')return '';return j.DisplayText||'';
+}
+let localPipe=null,localLoading=null;
+async function loadLocal(){
+ if(localPipe&&localPipe.model===$('local-model').value)return localPipe.run;
+ if(localLoading)return localLoading;
+ const model=$('local-model').value;
+ localLoading=(async()=>{
+  $('local-status').textContent='Loading the library…';
+  const T=await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1/dist/transformers.min.js');
+  const device=('gpu' in navigator)&&model.endsWith('base')?'webgpu':'wasm';
+  const files={};
+  const opts={device,dtype:device==='webgpu'?{encoder_model:'fp32',decoder_model_merged:'q4'}:'q8',progress_callback:p=>{if(p.status==='progress'&&p.total){files[p.file]=[p.loaded,p.total];const l=Object.values(files).reduce((a,f)=>a+f[0],0),t=Object.values(files).reduce((a,f)=>a+f[1],0);$('local-status').textContent=`Downloading ${Math.round(l/1e6)} of ${Math.round(t/1e6)} MB…`}}};
+  let run;
+  try{run=await T.pipeline('automatic-speech-recognition',model,opts)}
+  catch(e){if(device!=='webgpu')throw e;opts.device='wasm';opts.dtype='q8';run=await T.pipeline('automatic-speech-recognition',model,opts)}
+  localPipe={model,run,device:opts.device};$('local-status').textContent=`Ready (${model.split('/')[1]}, ${opts.device==='webgpu'?'graphics chip':'processor'}). Stays cached on this phone.`;
+  return run;
+ })();
+ try{return await localLoading}catch(e){$('local-status').textContent='Could not load: '+e.message;throw e}finally{localLoading=null}
+}
+$('load-local').onclick=()=>{keys.localModel=$('local-model').value;store.set('cue-lab-keys',keys);loadLocal().catch(()=>{})};
+async function localTranscribe(pcm){if(!localPipe)throw new Error('Tap “Download on-phone model” in step 1 first');const run=localPipe.run;const out=await run(pcm,{language:'russian',task:'transcribe'});return (out.text||'').trim()}
+
+async function runAll(r,pcm,secs){
+ const pcm16=toInt16(pcm),blob=wav(pcm16),line=r.line;
+ const attempt={at:new Date().toISOString(),line,wrong:$('wrong').checked,secs:+secs.toFixed(1),results:{}};
+ const jobs=[];
+ const job=(id,fn)=>{const e=ENGINES.find(x=>x.id===id);if(!enabled[id]||!hasKey(e))return;const t0=performance.now();attempt.results[id]={pending:true};
+  jobs.push(fn().then(text=>{attempt.results[id]={text,ms:Math.round(performance.now()-(id==='dg'?r.stoppedAt:t0)),ok:!!(window.CueCore&&CueCore.matches(line,text)),exact:!!(window.CueCore&&CueCore.normalize(line)===CueCore.normalize(text))}}).catch(err=>{attempt.results[id]={error:String(err.message||err)}}).finally(()=>renderAttempts()))};
+ job('oa4o',()=>openaiTranscribe('gpt-4o-transcribe',blob,line));
+ job('oa4o-np',()=>openaiTranscribe('gpt-4o-transcribe',blob,''));
+ job('oamini',()=>openaiTranscribe('gpt-4o-mini-transcribe',blob,line));
+ job('oagt',()=>openaiTranscribe('gpt-transcribe',blob,line));
+ if(r.dg){job('dg',()=>r.dg.finish())}
+ job('gg',()=>googleTranscribe(pcm16,line));
+ job('az',()=>azureTranscribe(blob));
+ if(localPipe)job('local',()=>localTranscribe(pcm));
+ if(!jobs.length){status('Switch on at least one service and add its key in step 1.');return}
+ attempts.unshift(attempt);renderAttempts();
+ await Promise.all(jobs);store.set('cue-lab-attempts',attempts.slice(0,200));renderAttempts();
+}
+
+// ---------- results ----------
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+function verdict(res,wrong){if(res.pending)return '<span class="muted">…</span>';if(res.error)return '<span class="err">error</span>';const good=wrong?!res.ok:res.ok;return good?`<span class="ok">${res.ok?(res.exact?'✓ word-perfect':'✓ accepted'):'✓ rejected'}</span>`:`<span class="bad">${res.ok?'✗ false accept':'✗ rejected'}</span>`}
+function renderAttempts(){
+ const stats={};
+ for(const a of attempts)for(const[id,res]of Object.entries(a.results)){if(res.pending)continue;const s=stats[id]||(stats[id]={n:0,good:0,exact:0,err:0,ms:[],secs:0});s.n++;if(res.error)s.err++;else{if(a.wrong?!res.ok:res.ok)s.good++;if(!a.wrong&&res.exact)s.exact++;s.ms.push(res.ms);s.secs+=a.secs}}
+ const rows=ENGINES.filter(e=>stats[e.id]).map(e=>{const s=stats[e.id];const ms=s.ms.slice().sort((a,b)=>a-b);const med=ms.length?(ms[Math.floor(ms.length/2)]/1000).toFixed(1)+' s':'–';const cost=e.price?'$'+(s.secs/60*e.price).toFixed(4):'$0';return `<tr><td>${esc(e.name)}</td><td>${s.good}/${s.n}<br><span class="muted small">${s.exact} word-perfect</span>${s.err?` <span class="err">(${s.err} errors)</span>`:''}</td><td>${med}</td><td>${cost}</td></tr>`});
+ $('summary').innerHTML=rows.length?`<table><tr><th>Service</th><th>Right call</th><th>Wait after you stop</th><th>Cost so far</th></tr>${rows.join('')}</table>`:'<p class="muted">No attempts yet.</p>';
+ $('attempts').innerHTML=attempts.slice(0,30).map(a=>`<div class="attempt"><div class="heard"><b>${esc(a.line)}</b></div><div class="muted small">${a.wrong?'Said wrong on purpose · ':''}${a.secs} s of audio</div><table>${Object.entries(a.results).map(([id,res])=>{const e=ENGINES.find(x=>x.id===id);return `<tr><td class="small">${esc(e?e.name:id)}</td><td class="heard">${res.error?`<span class="err">${esc(res.error)}</span>`:esc(res.text||'')}</td><td>${verdict(res,a.wrong)}</td><td class="small">${res.ms!=null?(res.ms/1000).toFixed(1)+' s':''}</td></tr>`}).join('')}</table></div>`).join('');
+}
+$('copy').onclick=async()=>{
+ const lines=[];lines.push('Cue speech lab results, '+new Date().toISOString());lines.push('Device: '+navigator.userAgent);
+ for(const a of attempts.slice().reverse()){lines.push('');lines.push(`LINE: ${a.line}${a.wrong?'  [said wrong on purpose]':''}  (${a.secs}s)`);for(const[id,res]of Object.entries(a.results))lines.push(`  ${id}: ${res.error?'ERROR '+res.error:`"${res.text}" ${res.exact?'EXACT':res.ok?'MATCH':'NO MATCH'} ${res.ms}ms`}`)}
+ const text=lines.join('\n');
+ try{await navigator.clipboard.writeText(text);$('copy-msg').textContent='Copied.'}catch{const t=document.createElement('textarea');t.value=text;document.body.appendChild(t);t.select();document.execCommand('copy');t.remove();$('copy-msg').textContent='Copied.'}
+};
+$('clear').onclick=()=>{if(confirm('Clear all results on this phone?')){attempts=[];store.set('cue-lab-attempts',attempts);renderAttempts()}};
+
+fillKeys();renderEngines();renderLines();renderAttempts();
+</script>
+</body></html>
