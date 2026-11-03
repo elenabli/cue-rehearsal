@@ -69,7 +69,7 @@ For a while, rehearsing in iPhone Safari kept breaking. After a missed line, Cue
 **A test showed the problem was Cue's own code.** A small Safari test page (#14) ran on the same iPhone. It heard five rounds in a row, both with a new recognition session each round and with one reused session, and it spoke every cue. The app differed from that page in three ways:
 
 - It cancelled speech synthesis before every partner line. On iOS, this can make the next line disappear.
-- It aborted recognition sessions: a microphone check at Start, a watchdog that killed "deaf" sessions, and an abort when you tapped Speak. Aborting leaves Safari's recognizer in a bad state.
+- It aborted recognition sessions: a microphone check at Start, a watchdog that killed "deaf" sessions, and an abort when you tapped Speak. On the phone, this is what left the microphone deaf.
 - It started a new session before the old one had fully ended.
 
 Ironically, some of these were workarounds added to fix the problem. #18 removes them. Speech is cancelled only when something is actually playing, sessions are stopped instead of aborted, and a new session starts only after the old one has ended.
