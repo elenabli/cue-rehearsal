@@ -58,7 +58,7 @@ Scanned PDFs need text recognition (OCR) in a PDF app before import. Review extr
 
 PDF extraction happens on your device. Scripts, the selected character, and progress for each scene are saved in that browser. They do not sync between devices; clearing website data removes them. Use **Export whole play** to keep a copy of the script.
 
-Speech input uses the browser’s Web Speech service. It needs microphone permission and may require an internet connection. Audio may be processed by the browser vendor’s speech service, and recognition can mishear spoken lines. After an initial visit, the app is cached for offline reading; speech input may still need a connection.
+Speech input uses the browser’s Web Speech service (on iPhone, see [iPhone app](#iphone-app)). It needs microphone permission and may require an internet connection. Audio may be processed by the browser vendor’s speech service, and recognition can mishear spoken lines. After an initial visit, the app is cached for offline reading; speech input may still need a connection.
 
 ## Development
 
@@ -75,4 +75,25 @@ Mozilla PDF.js is bundled in `dist/vendor/pdfjs/`, together with its Apache-2.0 
 
 ## iPhone app
 
-On iPhone, Safari's speech recognition stops hearing after the first attempt. The native iPhone app in `ios/` uses Apple's own speech recognizer and voice instead, with the same screens. See [docs/IOS.md](docs/IOS.md) to install it with Xcode.
+On iPhone, use the native app in `ios/` rather than Safari. It has the same screens as the web version, but listens and speaks through Apple's own speech engine. See [docs/IOS.md](docs/IOS.md) to install it with Xcode. The web version still works unchanged in desktop browsers and is a fine way to try Cue.
+
+### Why Safari wasn't enough
+
+Cue depends on two browser features: speech recognition to hear your lines, and speech synthesis to read your partners' lines. In iPhone Safari, both proved unreliable for rehearsal:
+
+- **Listening went deaf after a mistake.** The first attempt at a line worked. If it didn't match and Cue started listening again, Safari kept the microphone open but stopped returning any words. This matches a known WebKit problem ([WebAudio/web-speech-api#96](https://github.com/WebAudio/web-speech-api/issues/96)): recognition on iOS fails silently after its first result. A rehearsal app has to retry constantly, so this broke the core loop.
+- **Unusual play words were misheard.** Safari's recognizer only knows common vocabulary and can't be told what to expect. A line like «Господи, перегарищем-то разит!» came back as «…рящий тормозит», so a correctly spoken line still failed.
+- **The partner voice went silent.** Once the microphone had been used, Safari often stopped playing synthesized speech, so scene partners' lines were never read aloud and the rehearsal stalled after a few lines.
+
+We tried several workarounds in the web app: a watchdog that restarts listening when it hears nothing, waiting for the old session to fully close before starting a new one, replacing sessions that never start receiving audio, a Speak button that always starts fresh, and replaying the cue before each retry (audio playback in between sometimes revived recognition). They helped on desktop, but on the phone listening still stopped and the partner voice stayed silent. These are limits of Safari's implementation, and a web page cannot reach past them.
+
+### What the native app does differently
+
+The iPhone app wraps the same web interface with [Capacitor](https://capacitorjs.com) and adds a small Swift plugin (`native/cue-speech`):
+
+- **Recognition** uses Apple's Speech framework (`SFSpeechRecognizer`) directly. Each listening attempt is a clean new session, so retries keep working.
+- **The recognizer is told the words of your next line** (contextual strings), which helps it get rare words and unusual word forms right.
+- **Partner lines** are spoken with `AVSpeechSynthesizer`, with the audio session set up for playing and recording together, so the voice and microphone no longer interfere.
+- The app's JavaScript is shared with the web version. On iPhone, `dist/native.js` stands in for the browser's speech features, so both versions run the same rehearsal logic.
+
+The trade-off is installation: the app is installed from Xcode on a Mac rather than from a link. With a free Apple ID it must be re-installed every 7 days (your play and progress stay). The steps are in [docs/IOS.md](docs/IOS.md).
