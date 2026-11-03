@@ -104,6 +104,7 @@ const ENGINES=[
  {id:'oa4o-np',name:'OpenAI gpt-4o-transcribe, no prompt',key:'openai',price:0.006,def:true},
  {id:'oamini',name:'OpenAI gpt-4o-mini-transcribe + prompt',key:'openai',price:0.003,def:true},
  {id:'oagt',name:'OpenAI gpt-transcribe + prompt',key:'openai',price:0.0045,def:true},
+ {id:'oalive',name:'OpenAI gpt-live-transcribe (live stream) + hints',key:'openai',price:0.017,def:true},
  {id:'dg',name:'Deepgram Nova-3 (live stream)',key:'deepgram',price:0.0077,def:true},
  {id:'gg',name:'Google Cloud Speech + line as hint',key:'google',price:0.016,def:true},
  {id:'az',name:'Azure Speech',key:'azure',price:0.0167,def:true},
@@ -112,7 +113,7 @@ const ENGINES=[
 const $=id=>document.getElementById(id);
 const store={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch{return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch{}}};
 let keys=store.get('cue-lab-keys',{});
-let enabled=store.get('cue-lab-enabled',Object.fromEntries(ENGINES.map(e=>[e.id,e.def])));
+let enabled=store.get('cue-lab-enabled',{});for(const e of ENGINES)if(!(e.id in enabled))enabled[e.id]=e.def;
 let attempts=store.get('cue-lab-attempts',[]);
 let selected=0;
 
@@ -145,7 +146,7 @@ $('custom').oninput=renderLines;
 // ---------- recording ----------
 const TARGET=16000;
 let rec=null,lastPcm=null;
-function downsample(buf,rate){if(rate===TARGET)return buf;const ratio=rate/TARGET,len=Math.floor(buf.length/ratio),out=new Float32Array(len);for(let i=0;i<len;i++){const s=Math.floor(i*ratio),e=Math.min(buf.length,Math.floor((i+1)*ratio));let sum=0;for(let j=s;j<e;j++)sum+=buf[j];out[i]=sum/Math.max(1,e-s)}return out}
+function downsample(buf,rate,target=TARGET){if(rate===target)return buf;const ratio=rate/target,len=Math.floor(buf.length/ratio),out=new Float32Array(len);for(let i=0;i<len;i++){const s=Math.floor(i*ratio),e=Math.min(buf.length,Math.floor((i+1)*ratio));let sum=0;for(let j=s;j<e;j++)sum+=buf[j];out[i]=sum/Math.max(1,e-s)}return out}
 function toInt16(f){const o=new Int16Array(f.length);for(let i=0;i<f.length;i++){const s=Math.max(-1,Math.min(1,f[i]));o[i]=s<0?s*0x8000:s*0x7fff}return o}
 function concat(chunks){const n=chunks.reduce((a,c)=>a+c.length,0),o=new Float32Array(n);let p=0;for(const c of chunks){o.set(c,p);p+=c.length}return o}
 function wav(pcm16){const b=new ArrayBuffer(44+pcm16.length*2),v=new DataView(b);const w=(o,s)=>{for(let i=0;i<s.length;i++)v.setUint8(o+i,s.charCodeAt(i))};w(0,'RIFF');v.setUint32(4,36+pcm16.length*2,true);w(8,'WAVE');w(12,'fmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);v.setUint32(24,TARGET,true);v.setUint32(28,TARGET*2,true);v.setUint16(32,2,true);v.setUint16(34,16,true);w(36,'data');v.setUint32(40,pcm16.length*2,true);new Int16Array(b,44).set(pcm16);return new Blob([b],{type:'audio/wav'})}
@@ -161,9 +162,11 @@ async function startRec(){
  const src=ctx.createMediaStreamSource(stream),proc=ctx.createScriptProcessor(4096,1,1);
  const r={line,stream,ctx,src,proc,chunks:[],started:performance.now(),voiced:false,lastVoice:0,dg:null};
  if(enabled.dg&&keys.deepgram)r.dg=openDeepgram(line);
+ if(enabled.oalive&&keys.openai)r.oal=openOpenAILive(line);
  proc.onaudioprocess=ev=>{
   const f=new Float32Array(ev.inputBuffer.getChannelData(0));const d=downsample(f,ctx.sampleRate);r.chunks.push(d);
   if(r.dg)r.dg.send(toInt16(d));
+  if(r.oal)r.oal.send(toInt16(downsample(f,ctx.sampleRate,24000)));
   let sum=0;for(let i=0;i<f.length;i++)sum+=f[i]*f[i];const rms=Math.sqrt(sum/f.length);
   $('level').style.width=Math.min(100,rms*600)+'%';
   const now=performance.now();if(rms>0.02){r.voiced=true;r.lastVoice=now}
@@ -181,7 +184,7 @@ async function stopRec(){
  $('rec').textContent='● Record';$('rec').classList.remove('on');$('level').style.width='0';
  const pcm=concat(r.chunks);lastPcm=pcm;$('play').disabled=false;
  const secs=pcm.length/TARGET;
- if(!r.voiced){status('I heard nothing loud enough. Try again a little closer to the phone.');if(r.dg)r.dg.cancel();return}
+ if(!r.voiced){status('I heard nothing loud enough. Try again a little closer to the phone.');if(r.dg)r.dg.cancel();if(r.oal)r.oal.cancel();return}
  status('Sending to the services…');
  await runAll(r,pcm,secs);
  status('Done. Pick another line or say this one again.');
@@ -214,6 +217,41 @@ function openDeepgram(line){
    if(ws.readyState===1)flush();else if(ws.readyState===0){const o=ws.onopen;ws.onopen=()=>{o();flush()}}
    const t=setTimeout(()=>{if(!closed){err=err||'Timed out';try{ws.close()}catch{}}},10000);
    await done;clearTimeout(t);if(err&&!finals.length)throw new Error(err);return finals.join(' ');
+  }
+ };
+}
+// OpenAI live transcription: a short-lived key is made with the user's key, then audio streams over a WebSocket.
+function openOpenAILive(line){
+ const keywords=hintPhrases(line).slice(1).map(w=>w.replace(/[<>\n\r]/g,'')).filter(Boolean).slice(0,30);
+ const transcription={model:'gpt-live-transcribe',languages:['ru'],prompt:'Актёр репетирует и произносит реплику из пьесы: «'+line+'»',keywords,delay:'low'};
+ const session={type:'transcription',audio:{input:{format:{type:'audio/pcm',rate:24000},transcription,turn_detection:null}}};
+ const queue=[];let ws=null,err=null,resolveDone,closed=false,itemId=null,text='',deltas='',ready=false,cancelled=false;
+ const done=new Promise(r=>resolveDone=r);
+ const sendAudio=buf=>ws.send(JSON.stringify({type:'input_audio_buffer.append',audio:b64(buf)}));
+ (async()=>{
+  let token=keys.openai;
+  try{const res=await fetch('https://api.openai.com/v1/realtime/client_secrets',{method:'POST',headers:{Authorization:'Bearer '+keys.openai,'Content-Type':'application/json'},body:JSON.stringify({session})});const j=await res.json().catch(()=>({}));if(res.ok&&(j.value||j.client_secret&&j.client_secret.value))token=j.value||j.client_secret.value;else if(!res.ok)err='Short-lived key: '+((j.error&&j.error.message)||res.status)}catch(e){}
+  if(cancelled){resolveDone();return}
+  ws=new WebSocket('wss://api.openai.com/v1/realtime?intent=transcription',['realtime','openai-insecure-api-key.'+token]);
+  ws.onopen=()=>{err=null;ws.send(JSON.stringify({type:'session.update',session}));ready=true;while(queue.length)sendAudio(queue.shift());if(r_finish)r_finish()};
+  ws.onmessage=ev=>{let m;try{m=JSON.parse(ev.data)}catch{return}
+   if(m.type==='input_audio_buffer.committed')itemId=m.item_id;
+   else if(m.type==='conversation.item.input_audio_transcription.delta')deltas+=m.delta||'';
+   else if(m.type==='conversation.item.input_audio_transcription.completed'&&(!itemId||m.item_id===itemId)){text=m.transcript||deltas;try{ws.close(1000)}catch{}}
+   else if(m.type==='conversation.item.input_audio_transcription.failed')err=(m.error&&m.error.message)||'Transcription failed';
+   else if(m.type==='error'){err=(m.error&&m.error.message)||'Error';}};
+  ws.onerror=()=>{err=err||'Could not connect'};
+  ws.onclose=ev=>{closed=true;if(!text&&!err)err='Closed: '+(ev.reason||ev.code);resolveDone()};
+ })();
+ let r_finish=null;
+ return{
+  send(int16){if(ws&&ready&&ws.readyState===1)sendAudio(int16);else queue.push(int16)},
+  cancel(){cancelled=true;try{ws&&ws.close()}catch{}},
+  async finish(){
+   const commit=()=>{try{ws.send(JSON.stringify({type:'input_audio_buffer.commit'}))}catch{}};
+   if(ws&&ready&&ws.readyState===1)commit();else r_finish=commit;
+   const t=setTimeout(()=>{if(!closed){err=err||'Timed out';try{ws&&ws.close()}catch{}resolveDone()}},12000);
+   await done;clearTimeout(t);if(!text)throw new Error(err||'Heard nothing');return text.trim();
   }
  };
 }
@@ -257,11 +295,12 @@ async function runAll(r,pcm,secs){
  const attempt={at:new Date().toISOString(),line,wrong:$('wrong').checked,secs:+secs.toFixed(1),results:{}};
  const jobs=[];
  const job=(id,fn)=>{const e=ENGINES.find(x=>x.id===id);if(!enabled[id]||!hasKey(e))return;const t0=performance.now();attempt.results[id]={pending:true};
-  jobs.push(fn().then(text=>{attempt.results[id]={text,ms:Math.round(performance.now()-(id==='dg'?r.stoppedAt:t0)),ok:!!(window.CueCore&&CueCore.matches(line,text)),exact:!!(window.CueCore&&CueCore.normalize(line)===CueCore.normalize(text))}}).catch(err=>{attempt.results[id]={error:String(err.message||err)}}).finally(()=>renderAttempts()))};
+  jobs.push(fn().then(text=>{attempt.results[id]={text,ms:Math.round(performance.now()-(id==='dg'||id==='oalive'?r.stoppedAt:t0)),ok:!!(window.CueCore&&CueCore.matches(line,text)),exact:!!(window.CueCore&&CueCore.normalize(line)===CueCore.normalize(text))}}).catch(err=>{attempt.results[id]={error:String(err.message||err)}}).finally(()=>renderAttempts()))};
  job('oa4o',()=>openaiTranscribe('gpt-4o-transcribe',blob,line));
  job('oa4o-np',()=>openaiTranscribe('gpt-4o-transcribe',blob,''));
  job('oamini',()=>openaiTranscribe('gpt-4o-mini-transcribe',blob,line));
  job('oagt',()=>openaiTranscribe('gpt-transcribe',blob,line));
+ if(r.oal){job('oalive',()=>r.oal.finish())}
  if(r.dg){job('dg',()=>r.dg.finish())}
  job('gg',()=>googleTranscribe(pcm16,line));
  job('az',()=>azureTranscribe(blob));
