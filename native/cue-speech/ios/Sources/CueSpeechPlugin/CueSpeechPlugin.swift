@@ -24,6 +24,7 @@ public class CueSpeechPlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizerDe
         CAPPluginMethod(name: "startListening", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "stopListening", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "abortListening", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setPause", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "speak", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "cancelSpeech", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getVoices", returnType: CAPPluginReturnPromise),
@@ -42,6 +43,8 @@ public class CueSpeechPlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizerDe
         var stopping = false
         var finished = false
         var peak: Float = 0
+        /// Quiet time that ends the line; the page raises it while the actor is partway through a line and thinking.
+        var pause: TimeInterval = 1.4
         init(id: String, request: SFSpeechAudioBufferRecognitionRequest) { self.id = id; self.request = request }
     }
 
@@ -62,8 +65,10 @@ public class CueSpeechPlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizerDe
     private var logLines: [String] = []
     private let started = Date()
 
-    /// How long a pause ends the line, once some words have been heard.
+    /// How long a pause ends the line, once some words have been heard (unless the page asks for more thinking time).
     private let pauseToEnd: TimeInterval = 1.4
+    /// The longest thinking pause the page may ask for.
+    private let longestPause: TimeInterval = 20
 
     override public func load() {
         synthesizer.delegate = self
@@ -328,7 +333,7 @@ public class CueSpeechPlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizerDe
     /// Apple's recognizer keeps listening until told to stop, so a pause after some words ends the line.
     private func scheduleSilence(_ s: Session) {
         silenceTimer?.invalidate()
-        silenceTimer = Timer.scheduledTimer(withTimeInterval: pauseToEnd, repeats: false) { [weak self, weak s] _ in
+        silenceTimer = Timer.scheduledTimer(withTimeInterval: s.pause, repeats: false) { [weak self, weak s] _ in
             guard let self = self, let s = s, self.session === s else { return }
             self.log("\(s.id) pause, finishing")
             self.finishAudio(s)
@@ -401,6 +406,20 @@ public class CueSpeechPlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizerDe
                 self.pending = nil
                 self.send(next.id, ["type": "end"])
             }
+        }
+    }
+
+    /// The page sets how long a pause ends the line: longer while the actor is partway through and remembering the rest.
+    /// 0 goes back to the usual pause. The quiet time is counted again from now.
+    @objc func setPause(_ call: CAPPluginCall) {
+        let id = call.getString("id")
+        let seconds = call.getDouble("seconds") ?? 0
+        call.resolve()
+        DispatchQueue.main.async {
+            guard let s = self.session, s.id == id, !s.stopping else { return }
+            s.pause = seconds > 0 ? min(seconds, self.longestPause) : self.pauseToEnd
+            self.log("\(s.id) pause " + String(format: "%.1f", s.pause) + " s")
+            if s.heardWords { self.scheduleSilence(s) }
         }
     }
 

@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "test": "node tests/rehearsal.cjs && node tests/retry.cjs && node tests/native.cjs && node tests/native-flow.cjs && node tests/pdf-import.cjs",
+    "test": "node tests/rehearsal.cjs && node tests/retry.cjs && node tests/native.cjs && node tests/native-flow.cjs && node tests/thinking.cjs && node tests/pdf-import.cjs",
     "start": "python3 -m http.server 4173 --directory dist",
     "ios": "cap sync ios && cap open ios",
     "ios:sync": "cap sync ios",

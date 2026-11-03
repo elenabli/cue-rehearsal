@@ -19,6 +19,8 @@
     start(){if(this.id)throw new Error('InvalidStateError: already started');this.id='r'+(++seq);sessions.set(this.id,this);pageLog(this.id+' start');
       Cue.startListening({id:this.id,lang:this.lang,phrases:this.phrases||[]}).catch(()=>{this._event({type:'error',error:'audio-capture'});this._event({type:'end'});});}
     stop(){if(this.id&&!this.ended){pageLog(this.id+' stop');}if(this.id&&!this.ended)Cue.stopListening({id:this.id}).catch(()=>{});}
+    // Mid-line thinking: wait this many seconds of quiet before ending the line (0 = the usual short pause).
+    holdPause(seconds){if(this.id&&!this.ended){pageLog(this.id+' hold '+seconds);Cue.setPause({id:this.id,seconds:Number(seconds)||0}).catch(()=>{});}}
     abort(){if(this.id&&!this.ended){pageLog(this.id+' abort');}if(this.id&&!this.ended)Cue.abortListening({id:this.id}).catch(()=>{});}
     _event(e){if(this.ended)return;if(e.type!=='result')pageLog(this.id+' '+e.type+(e.error?' '+e.error:'')+(e.detail?' ('+e.detail+')':'')+(this['on'+e.type]?'':' [no handler]'));if(e.type==='end'){this.ended=true;sessions.delete(this.id);}
       const handler=this['on'+e.type];if(!handler)return;
