@@ -44,7 +44,7 @@ Turn on **Pocket mode** before you start to rehearse with the phone in your pock
 - if you say nothing, Cue reads the first few words, then the whole line, then pauses and says so;
 - a short fanfare and "Scene complete" at the end.
 
-Taps are ignored while pocket mode runs, so the phone can't press buttons in your pocket. Press and hold the screen to pause. In the iPhone app the screen turns off against your pocket, as during a call, and the right/wrong sounds come with a tap or buzz. Don't lock the phone with the side button: iPhone stops the app when it locks. Headphones such as AirPods work as microphone and speaker. On the web the screen stays on, there are no haptics on iPhone, and the sounds can be muted by the silent switch.
+Taps are ignored while pocket mode runs, so the phone can't press buttons in your pocket. Press and hold the screen to pause. The screen stays on during the rehearsal: if the phone locks, Safari stops listening, so leave it unlocked. Headphones such as AirPods work as microphone and speaker. On iPhone the sounds follow the silent switch, so turn silent mode off, and there is no vibration (Safari doesn't support it).
 
 ## Script format
 
@@ -84,7 +84,3 @@ npm test
 ```
 
 Mozilla PDF.js is bundled in `dist/vendor/pdfjs/`, together with its Apache-2.0 license and supporting font, character-map, and WebAssembly assets. Optional Google Fonts have system-font fallbacks.
-
-## iPhone app
-
-On iPhone, Safari's speech recognition stops hearing after the first attempt. The native iPhone app in `ios/` uses Apple's own speech recognizer and voice instead, with the same screens. See [docs/IOS.md](docs/IOS.md) to install it with Xcode.

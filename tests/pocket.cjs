@@ -1,4 +1,5 @@
 // Pocket mode: tones say right or wrong, missed lines are read aloud, silence gets a prompt, and the scene end is announced.
+// A stub stands in for the tone player so the test can record which tones play and when.
 const assert=require('node:assert/strict');const fs=require('node:fs');const vm=require('node:vm');
 const elements=new Map();function element(){return {value:'',textContent:'',hidden:false,disabled:false,dataset:{},classList:{toggle(){},add(){},remove(){}},children:[],setAttribute(k,v){this[k]=v},replaceChildren(...els){this.children=els},append(...els){this.children.push(...els)},querySelector(){return this.button||(this.button=element())},showModal(){},close(){},click(){}};}
 const get=id=>{if(!elements.has(id))elements.set(id,element());return elements.get(id)};
@@ -64,4 +65,4 @@ guard.onpointerdown({});const hold=[...timers].find(([,t])=>t.ms===800);assert.o
 // Pocket mode off: no tones at all.
 get('pocket-toggle').onclick();run('data.autoMic=true');get('restart').onclick();get('start').onclick();settle();take();
 say('Wrong words entirely');assert.ok(!take().some(e=>e.startsWith('tone:')),'No tones without pocket mode');
-console.log('Pocket mode passed: tones for right and wrong, missed lines read aloud, silence prompts, scene end, screen-off, and hold to pause.');
+console.log('Pocket mode passed: tones for right and wrong, missed lines read aloud, silence prompts, scene end, and hold to pause.');
