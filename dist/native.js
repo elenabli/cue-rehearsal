@@ -43,6 +43,12 @@
   // Keep the screen on during a rehearsal, as the web version does with the Wake Lock API.
   const wakeLock={request(){Cue.keepAwake({on:true}).catch(()=>{});const listeners=[];return Promise.resolve({release(){Cue.keepAwake({on:false}).catch(()=>{});listeners.forEach(fn=>fn());return Promise.resolve();},addEventListener(type,fn){if(type==='release')listeners.push(fn);}});}};
 
+  // Pocket mode (pocket.js): tones and haptics played by the app, and the screen turning off against the pocket.
+  root.CuePocketNative={
+    tone(notes,haptic,gap){Cue.playTone({notes:notes.map(([f,d,g])=>({f,d,g})),haptic:haptic||'none',gap:gap||0}).catch(()=>{});},
+    proximity(on){Cue.pocketScreen({on:!!on}).catch(()=>{});}
+  };
+
   root.SpeechRecognition=NativeRecognition;root.webkitSpeechRecognition=NativeRecognition;root.SpeechSynthesisUtterance=NativeUtterance;
   try{Object.defineProperty(root,'speechSynthesis',{value:synthesis,configurable:true});}catch{}
   try{Object.defineProperty(root.navigator,'wakeLock',{value:wakeLock,configurable:true});}catch{}

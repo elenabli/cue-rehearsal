@@ -34,6 +34,18 @@ For access from an iPhone or another device, serve `dist/` from an HTTPS static 
 
 If the browser requires a tap to start listening, use **Speak**. If listening seems stuck, tap **Speak** again to start over. You can also choose **Type your line instead** to check a line by typing. The screen stays on while a rehearsal is running. Rehearsal settings let you choose the language and voice, adjust the partner’s pace, hide your lines, or turn automatic microphone activation off.
 
+## Pocket mode
+
+Turn on **Pocket mode** before you start to rehearse with the phone in your pocket, for example on a walk. Sounds tell you what happened, so you never need to look:
+
+- a soft ping when the microphone opens for your line;
+- a rising chime when the line is right;
+- a low tone when it's wrong. After the first miss you hear your cue again; after the second, Cue reads your line to you; after the third, it reads the line and moves on;
+- if you say nothing, Cue reads the first few words, then the whole line, then pauses and says so;
+- a short fanfare and "Scene complete" at the end.
+
+Taps are ignored while pocket mode runs, so the phone can't press buttons in your pocket. Press and hold the screen to pause. In the iPhone app the screen turns off against your pocket, as during a call, and the right/wrong sounds come with a tap or buzz. Don't lock the phone with the side button: iPhone stops the app when it locks. Headphones such as AirPods work as microphone and speaker. On the web the screen stays on, there are no haptics on iPhone, and the sounds can be muted by the silent switch.
+
 ## Script format
 
 Numbered headings such as `Сцена 1`, `СЦЕНА 22`, and `Scene 1` divide the play into scenes. Put headings on their own lines.

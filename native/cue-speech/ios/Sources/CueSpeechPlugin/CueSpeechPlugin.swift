@@ -1,6 +1,7 @@
 import Foundation
 import UIKit
 import AVFoundation
+import AudioToolbox
 import Speech
 import Capacitor
 
@@ -28,7 +29,9 @@ public class CueSpeechPlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizerDe
         CAPPluginMethod(name: "cancelSpeech", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getVoices", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "keepAwake", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "getLog", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "getLog", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "playTone", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "pocketScreen", returnType: CAPPluginReturnPromise)
     ]
 
     /// One listening session. Lives until Apple's task has really finished, not just until the page is told "end".
@@ -72,6 +75,11 @@ public class CueSpeechPlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizerDe
                 options: [.defaultToSpeaker, .allowBluetooth, .allowBluetoothA2DP])
         } catch {
             log("audio category failed: \(describe(error))")
+        }
+        // Pocket mode buzzes right after listening; iOS mutes haptics while recording unless allowed.
+        if #available(iOS 13, *) {
+            do { try AVAudioSession.sharedInstance().setAllowHapticsAndSystemSoundsDuringRecording(true) }
+            catch { log("haptics during recording failed: \(describe(error))") }
         }
         NotificationCenter.default.addObserver(self, selector: #selector(audioInterrupted(_:)),
                                                name: AVAudioSession.interruptionNotification, object: nil)
@@ -468,6 +476,75 @@ public class CueSpeechPlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizerDe
             ["voiceURI": voice.identifier, "name": voice.name, "lang": voice.language]
         }
         call.resolve(["voices": voices])
+    }
+
+    // MARK: Pocket mode
+
+    private var tonePlayer: AVAudioPlayer?
+
+    /// Play a short tone (a list of sine notes) and a haptic, so the actor knows right or wrong without looking.
+    /// The page waits for the tone's length itself, so this resolves straight away.
+    @objc func playTone(_ call: CAPPluginCall) {
+        let notes = (call.getArray("notes") as? [[String: Any]]) ?? []
+        let haptic = call.getString("haptic") ?? "none"
+        let gap = call.getDouble("gap") ?? 0
+        call.resolve()
+        DispatchQueue.main.async {
+            if !notes.isEmpty, self.session == nil, self.activateAudio() {
+                let wav = Self.toneWav(notes.map { (($0["f"] as? Double) ?? 440, ($0["d"] as? Double) ?? 0.1, ($0["g"] as? Double) ?? 0.3) }, gap: gap)
+                do {
+                    let player = try AVAudioPlayer(data: wav)
+                    self.tonePlayer = player
+                    player.play()
+                } catch {
+                    self.log("tone failed: \(self.describe(error))")
+                }
+            }
+            switch haptic {
+            case "success": UINotificationFeedbackGenerator().notificationOccurred(.success)
+            case "error": UINotificationFeedbackGenerator().notificationOccurred(.error)
+            case "light": UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            case "buzz": AudioServicesPlaySystemSound(kSystemSoundID_Vibrate)  // a long buzz, easy to feel in a pocket
+            default: break
+            }
+        }
+    }
+
+    /// 16-bit mono WAV of sine notes with a soft attack and decay, separated by short gaps.
+    private static func toneWav(_ notes: [(Double, Double, Double)], gap: Double) -> Data {
+        let rate = 44100.0
+        var samples: [Int16] = []
+        for (freq, dur, gain) in notes {
+            let n = Int(rate * max(0.01, min(dur, 2)))
+            for i in 0..<n {
+                let t = Double(i) / rate
+                let attack = min(1, t / 0.01)
+                let decay = exp(-4 * t / dur)
+                let v = sin(2 * .pi * freq * t) * min(max(gain, 0), 1) * attack * decay
+                samples.append(Int16(max(-1, min(1, v)) * 32000))
+            }
+            samples.append(contentsOf: [Int16](repeating: 0, count: Int(rate * max(0, gap))))
+        }
+        var data = Data()
+        func u32(_ v: UInt32) { var x = v.littleEndian; data.append(Data(bytes: &x, count: 4)) }
+        func u16(_ v: UInt16) { var x = v.littleEndian; data.append(Data(bytes: &x, count: 2)) }
+        let bytes = UInt32(samples.count * 2)
+        data.append("RIFF".data(using: .ascii)!); u32(36 + bytes); data.append("WAVE".data(using: .ascii)!)
+        data.append("fmt ".data(using: .ascii)!); u32(16); u16(1); u16(1); u32(44100); u32(88200); u16(2); u16(16)
+        data.append("data".data(using: .ascii)!); u32(bytes)
+        samples.withUnsafeBufferPointer { data.append(Data(buffer: $0)) }
+        return data
+    }
+
+    /// Turn the screen off when the phone is against a pocket (or a face), as during a call. The app stays in
+    /// the foreground, so the rehearsal keeps going; locking with the side button would stop it.
+    @objc func pocketScreen(_ call: CAPPluginCall) {
+        let on = call.getBool("on") ?? false
+        DispatchQueue.main.async {
+            UIDevice.current.isProximityMonitoringEnabled = on
+            self.log("pocket screen \(on ? "on" : "off") (sensor \(UIDevice.current.isProximityMonitoringEnabled ? "available" : "unavailable"))")
+            call.resolve()
+        }
     }
 
     // MARK: Screen
