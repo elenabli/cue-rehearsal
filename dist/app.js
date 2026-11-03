@@ -101,8 +101,6 @@ function listen(automatic=false){
  deafRetries=automatic?deafRetries:0;
  if(!running&&!automatic)running=true;
  clearTimeout(retryTimer);const rec=new Recognition();recognition=rec;const session={rec,ended:false};lastSession=session;rec.lang=data.language;rec.interimResults=true;rec.continuous=false;rec.maxAlternatives=5;
- // The iPhone app's recognizer can be told which words to expect, which helps with rare forms («перегарищем»).
- if('phrases' in rec){const words=lines[data.index].text.split(/\s+/).map(w=>w.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu,'')).filter(Boolean);rec.phrases=[...new Set([lines[data.index].text,...words])];}
  const token=runId,lineIndex=data.index;heard={key:'',count:0};let finals=[],interim='',failed=false,retryAllowed=true,ended=false,watchdog=null,audio=false,deaf=false;
  const candidatesFor=rows=>{let combined=[partialSpeech],fresh=[''];for(const row of rows){combined=combined.flatMap(prefix=>row.map(text=>(prefix+' '+text).trim())).slice(0,25);fresh=fresh.flatMap(prefix=>row.map(text=>(prefix+' '+text).trim())).slice(0,25);}return [...new Set(partialSpeech?[...combined,...fresh]:combined)];};
  // iOS Safari can keep a session open without ever reporting results, which left the mic on but deaf. Stop a quiet session, and drop it if it won't stop.
@@ -116,14 +114,10 @@ function listen(automatic=false){
   feedback('Listening…\n“'+[partialSpeech,...finals.map(r=>r[0]),interim].filter(Boolean).join(' ')+'”');
   if(finals.length&&candidatesFor(finals).some(text=>CueCore.matches(lines[lineIndex].text,text)))rec.stop();
  };
- rec.onerror=e=>{if(token!==runId)return;failed=true;
-  // In the iPhone app a microphone or service hiccup is retried with a fresh session instead of stopping the rehearsal.
-  const recoverable=window.CueNative&&['audio-capture','network','service'].includes(e.error);
-  retryAllowed=e.error==='no-speech'||recoverable;if(!retryAllowed){running=false;partialSpeech='';}
-  if(recoverable){feedback('Restarting the microphone…');return;}
+ rec.onerror=e=>{if(token!==runId)return;failed=true;retryAllowed=e.error==='no-speech';if(!retryAllowed){running=false;partialSpeech='';}
   const messages={'not-allowed':'Allow the microphone for this site in Safari settings, then tap Speak.','service-not-allowed':'Safari blocked automatic listening. Tap Speak, or type your line.','audio-capture':'The microphone isn’t available. Check it, then tap Speak.','network':'Check your internet connection, then tap Speak.','no-speech':'Didn’t catch that. Try again.','aborted':'Listening stopped. Tap Speak.'};feedback(messages[e.error]||'Couldn’t recognize speech. Tap Speak to try again.',true);
  };
- const finish=()=>{if(ended||recognition!==rec)return;ended=true;window.CueSpeechLog?.note(`finish line ${lineIndex+1}: ${failed?'failed':finals.length?'heard':interim?'interim':'nothing'}`);if(!deaf&&rec.onend===finish)session.ended=true;recognition=null;clearTimeout(watchdog);document.body.classList.remove('listening');if(token!==runId||lineIndex!==data.index)return;
+ const finish=()=>{if(ended||recognition!==rec)return;ended=true;if(!deaf&&rec.onend===finish)session.ended=true;recognition=null;clearTimeout(watchdog);document.body.classList.remove('listening');if(token!==runId||lineIndex!==data.index)return;
   // iOS sometimes ends a session without marking anything final; what it heard is still the actor's line.
   if(!finals.length&&interim.trim())finals=[[interim.trim()]];
   if(deaf){deafRetries++;if(deafRetries>=2||!data.autoMic||!running){render();feedback('The microphone stopped hearing. Tap Speak to go on.',true);return;}render();retryTimer=setTimeout(()=>startWhenFree(()=>{if(token===runId&&lineIndex===data.index&&running)listen(true);}),800);return;}
@@ -132,7 +126,7 @@ function listen(automatic=false){
    if(candidates.some(text=>CueCore.matches(lines[lineIndex].text,text)))check(candidates);
    else{const expected=CueCore.normalize(lines[lineIndex].text);const prefix=candidates.filter(text=>{const value=CueCore.normalize(text);return value&&expected.startsWith(value+' ');}).sort((a,b)=>b.length-a.length)[0];if(prefix){partialSpeech=prefix;feedback('Good start. Carry on from where you stopped.');}else{partialSpeech='';check(candidates);wrong=!pendingAdvance;}}
   }else if(retryAllowed){silenceRetries++;if(!failed)feedback('Didn’t hear the whole line. Please say it again.',true);}
-  render();if(running&&data.autoMic&&!pendingAdvance&&retryAllowed){if(silenceRetries>=3){running=false;render();feedback('I can’t hear you. Tap Speak when you’re ready to go on.',true);}else{const again=()=>{if(token===runId&&lineIndex===data.index&&running)listen(true);};retryTimer=setTimeout(()=>startWhenFree(()=>{if(token!==runId||lineIndex!==data.index||!running)return;if(wrong&&!window.CueNative)cueAgain(again);else again();}),600);}}
+  render();if(running&&data.autoMic&&!pendingAdvance&&retryAllowed){if(silenceRetries>=3){running=false;render();feedback('I can’t hear you. Tap Speak when you’re ready to go on.',true);}else{const again=()=>{if(token===runId&&lineIndex===data.index&&running)listen(true);};retryTimer=setTimeout(()=>startWhenFree(()=>{if(token!==runId||lineIndex!==data.index||!running)return;if(wrong)cueAgain(again);else again();}),600);}}
  };rec.onend=finish;
  try{rec.start();render();}catch{recognition=null;running=false;document.body.classList.remove('listening');feedback('Safari needs a tap to continue. Tap Speak.',true);render();}
 }
@@ -179,9 +173,6 @@ $('save-script').onclick=()=>{try{
  }catch(e){$('script-message').textContent=e.message;}};
 function selectScene(next){if(!Number.isInteger(next)||!data.scenes[next]||next===data.activeScene)return;pause();data.activeScene=next;data.script=data.scenes[next].script;lines=sceneLines(data.scenes[next]);data.index=Math.max(0,Math.min(data.scenes[next].index||0,lines.length));feedback();$('typed').value='';render();}
 $('scene-picker').onchange=e=>selectScene(Number(e.target.value));
-// iPhone app only: the speech log helps diagnose listening problems on the device.
-if(window.CueNative){const help=$('web-iphone-help');if(help)help.hidden=true;}
-if(window.CueNative&&window.CueSpeechLog){$('speech-log-panel').hidden=false;$('copy-speech-log').onclick=()=>{const text=window.CueSpeechLog.lines().join('\n')||'(empty)';const box=$('speech-log');box.hidden=false;box.value=text;const done=ok=>{$('speech-log-message').textContent=ok?'Copied. Paste it into a message.':'Select the text below and copy it.';};try{navigator.clipboard.writeText(text).then(()=>done(true),()=>{box.select?.();done(false);});}catch{box.select?.();done(false);}};}
 $('reset-progress').onclick=()=>{if(window.confirm&&!window.confirm('Start every scene from its first line?'))return;pause();for(const scene of data.scenes)scene.index=0;data.index=0;feedback();$('typed').value='';render();$('reset-message').textContent='Every scene starts from the first line again.';};
 $('file-input').onchange=async e=>{const file=e.target.files[0];if(!file)return;if(file.size>500000){$('script-message').textContent='Please use a text file smaller than 500 KB.';return;}$('script-input').value=await file.text();$('cast-input').value=CuePdf.extractCast($('script-input').value).join('\n');if(!$('title-input').value.trim())$('title-input').value=file.name.replace(/\.txt$/i,'');e.target.value='';};
 $('export-script').onclick=()=>{const blob=new Blob([$('script-input').value],{type:'text/plain;charset=utf-8'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=($('title-input').value||'scene')+'.txt';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};

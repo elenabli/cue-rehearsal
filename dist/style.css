@@ -82,4 +82,3 @@ body.rehearsing .hint-button:not([hidden]){font-family:'PT Mono',ui-monospace,mo
 .hint-menu{border-radius:6px;box-shadow:4px 4px 0 #ecece8,4px 4px 0 1px var(--line)}
 .hint-menu button{font-family:'PT Mono',ui-monospace,monospace;border-radius:6px}
 .count-it{display:block;margin-top:10px;padding:8px 12px;border:1.5px solid #8a5338;border-radius:8px;background:transparent;color:#8a5338;font:600 14px/1.2 inherit;font-family:inherit;cursor:pointer}
-.speech-log textarea{width:100%;margin-top:8px;font:12px/1.4 ui-monospace,monospace;border:1px solid #d8d2c4;border-radius:8px;padding:8px;box-sizing:border-box}
