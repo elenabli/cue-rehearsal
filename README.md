@@ -72,3 +72,7 @@ npm test
 ```
 
 Mozilla PDF.js is bundled in `dist/vendor/pdfjs/`, together with its Apache-2.0 license and supporting font, character-map, and WebAssembly assets. Optional Google Fonts have system-font fallbacks.
+
+## iPhone app
+
+On iPhone, Safari's speech recognition stops hearing after the first attempt. The native iPhone app in `ios/` uses Apple's own speech recognizer and voice instead, with the same screens. See [docs/IOS.md](docs/IOS.md) to install it with Xcode.

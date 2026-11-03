@@ -1,0 +1,10 @@
+{
+  "name": "cue-speech",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Native speech recognition and voice for Cue on iOS (Apple Speech + AVSpeechSynthesizer).",
+  "main": "index.js",
+  "files": ["ios/Sources", "Package.swift", "index.js"],
+  "capacitor": { "ios": { "src": "ios" } },
+  "peerDependencies": { "@capacitor/core": "^7.0.0" }
+}

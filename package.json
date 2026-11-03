@@ -3,7 +3,18 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "test": "node tests/rehearsal.cjs && node tests/retry.cjs && node tests/pdf-import.cjs",
-    "start": "python3 -m http.server 4173 --directory dist"
+    "test": "node tests/rehearsal.cjs && node tests/retry.cjs && node tests/native.cjs && node tests/native-flow.cjs && node tests/pdf-import.cjs",
+    "start": "python3 -m http.server 4173 --directory dist",
+    "ios": "cap sync ios && cap open ios",
+    "ios:sync": "cap sync ios",
+    "postinstall": "node -e \"require('fs').copyFileSync('node_modules/@capacitor/core/dist/capacitor.js','dist/vendor/capacitor/capacitor.js')\""
+  },
+  "dependencies": {
+    "@capacitor/core": "7.6.10",
+    "@capacitor/ios": "7.6.10",
+    "cue-speech": "file:native/cue-speech"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "7.6.10"
   }
 }
