@@ -5,7 +5,7 @@ const get=id=>{if(!elements.has(id))elements.set(id,element());return elements.g
 const timers=new Map();let timerId=0;let recognizer;let spoken=[];
 const started=[];class Recognition{constructor(){recognizer=this;this.ended=false}start(){started.push(this);this.onstart?.()}stop(){if(this.ended)return;this.ended=true;this.onend?.()}abort(){this.ended=true}}
 class Utterance{constructor(text){this.text=text}}
-const synthesis={cancel(){},getVoices(){return []},addEventListener(){},speak(u){spoken.push(u)}};
+const synthesis={cancel(){},getVoices(){return []},addEventListener(){},speak(u){spoken.push(u);u.onstart?.()}};
 const ctx={console,document:{getElementById:get,querySelectorAll(){return []},createElement:element,body:{classList:{add(){},remove(){}}},addEventListener(){}},localStorage:{getItem(){return null},setItem(){}},navigator:{},window:{SpeechRecognition:Recognition,speechSynthesis:synthesis,scrollTo(){},addEventListener(){}},SpeechSynthesisUtterance:Utterance,setTimeout(fn,ms=0){timers.set(++timerId,{fn,ms});return timerId},clearTimeout(id){timers.delete(id)},Blob,URL};
 ctx.window.window=ctx.window;vm.createContext(ctx);vm.runInContext(fs.readFileSync('dist/core.js','utf8'),ctx);ctx.CueCore=ctx.window.CueCore;vm.runInContext(fs.readFileSync('dist/pdf-import.js','utf8'),ctx);ctx.CuePdf=ctx.window.CuePdf;vm.runInContext(fs.readFileSync('dist/app.js','utf8'),ctx);vm.runInContext('data.autoMic=false',ctx);
 function index(){return vm.runInContext('data.index',ctx)}// flush() runs the short app timers (advance, retry); watchdog() runs the long listening watchdogs.
