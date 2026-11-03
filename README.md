@@ -72,32 +72,3 @@ npm test
 ```
 
 Mozilla PDF.js is bundled in `dist/vendor/pdfjs/`, together with its Apache-2.0 license and supporting font, character-map, and WebAssembly assets. Optional Google Fonts have system-font fallbacks.
-
-## iPhone app
-
-On iPhone, use the native app in `ios/` rather than Safari. It has the same screens as the web version, but listens and speaks through Apple's own speech engine. See [docs/IOS.md](docs/IOS.md) to install it with Xcode. The web version still works unchanged in desktop browsers and is a fine way to try Cue.
-
-### Why we moved off Safari
-
-Cue depends on two browser features: speech recognition to hear your lines, and speech synthesis to read your partners' lines. On iPhone Safari, rehearsal kept breaking in three ways:
-
-- **Listening went deaf after a mistake.** The first attempt at a line worked. If it didn't match and Cue started listening again, Safari kept the microphone open but returned no words.
-- **Unusual play words were misheard.** Safari's recognizer can't be told what words to expect. A line like «Господи, перегарищем-то разит!» came back as «…рящий тормозит», so a correctly spoken line still failed.
-- **The partner voice went silent.** After the microphone had been used, partners' lines often weren't read aloud, and the rehearsal stalled after a few lines.
-
-**How much of this was Safari, and how much was Cue?** We don't know for certain. The web version starts a new, short recognition session for every line and every retry (`continuous = false`). Starting and stopping sessions this often is exactly the pattern that a known WebKit problem describes ([WebAudio/web-speech-api#96](https://github.com/WebAudio/web-speech-api/issues/96)): on iOS, recognition can fail silently after its first result. So our own design may have triggered the "deaf" behaviour. One long-running session for the whole scene was never tried, and it might have avoided it.
-
-Workarounds we did try in the web app: a watchdog that restarts listening when it hears nothing, waiting for the old session to fully close before starting a new one, replacing sessions that never receive audio, a Speak button that always starts fresh, and replaying the cue before each retry. None of these fixed it on the phone.
-
-We moved to a native app anyway, because it solves all three problems together. Safari cannot be told the words of the next line, and on iOS it gives no control over how the microphone and voice share audio. The native app can do both.
-
-### What the native app does differently
-
-The iPhone app wraps the same web interface with [Capacitor](https://capacitorjs.com) and adds a small Swift plugin (`native/cue-speech`):
-
-- **Recognition** uses Apple's Speech framework (`SFSpeechRecognizer`) directly. Each listening attempt is a clean new session, so retries keep working.
-- **The recognizer is told the words of your next line** (contextual strings), which helps it get rare words and unusual word forms right.
-- **Partner lines** are spoken with `AVSpeechSynthesizer`, with the audio session set up for playing and recording together, so the voice and microphone no longer interfere.
-- The app's JavaScript is shared with the web version. On iPhone, `dist/native.js` stands in for the browser's speech features, so both versions run the same rehearsal logic.
-
-The trade-off is installation: the app is installed from Xcode on a Mac rather than from a link. With a free Apple ID it must be re-installed every 7 days (your play and progress stay). The steps are in [docs/IOS.md](docs/IOS.md).
