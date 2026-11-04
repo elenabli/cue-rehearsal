@@ -60,23 +60,19 @@ PDF extraction happens on your device. Scripts, the selected character, and prog
 
 Speech input uses the browser’s Web Speech service. It needs microphone permission and may require an internet connection. Audio may be processed by the browser vendor’s speech service, and recognition can mishear spoken lines. After an initial visit, the app is cached for offline reading; speech input may still need a connection.
 
-## Speech on iPhone: what went wrong, and what we learned
+## Speech on iPhone: why it is unreliable
 
-For a while, rehearsing in iPhone Safari kept breaking. After a missed line, Cue stopped hearing you: the microphone stayed on but no words came back. The partner voice also went silent after a few lines, so the scene stalled.
+Speech recognition in iPhone Safari is unreliable, and it sometimes goes silent. When that happens, Cue stops hearing you: the microphone indicator is on, but no words come back, so the scene can't move on. The partner voice has also gone quiet at times.
 
-**We first blamed Safari.** A known WebKit report ([WebAudio/web-speech-api#96](https://github.com/WebAudio/web-speech-api/issues/96)) describes iOS recognition failing silently after its first result. Several web workarounds didn't help on the phone, so we built a native iPhone app that used Apple's own speech framework (#9). It worked on the phone. We later removed it (#11) to keep Cue a single web app.
+**This is Safari, not the play or your phone settings.** We tested it with a minimal Safari test page (#14) that contains none of Cue's code, only Safari's own speech recognition. On 2026-11-03 it heard all five test rounds on Lena's iPhone. On 2026-11-04, the same page on the same phone heard nothing in any of the five rounds. Safari reported that listening had started and that audio was coming in, but it never returned any words. A known WebKit report ([WebAudio/web-speech-api#96](https://github.com/WebAudio/web-speech-api/issues/96)) describes the same kind of silent failure on iOS.
 
-**A test pointed at Cue's own code.** A small Safari test page (#14) ran on the same iPhone. It heard five rounds in a row, both with a new recognition session each round and with one reused session, and it spoke every cue. So the app, not Safari itself, seemed to be at fault. The app differed from that page in three ways:
+**What we tried.** Before we found this, we tried several fixes in the app: restarting listening when it heard nothing, waiting for old sessions to end, and replaying the cue before a retry (#3, #7, #8). We later removed calls that could interfere with Safari (#18). None of this can make Safari's recognizer reliable, because the failure happens inside Safari itself. On a good day it works, and on a bad day it doesn't.
 
-- It cancelled speech synthesis before every partner line. On iOS, this can make the next line disappear.
-- It aborted recognition sessions: a microphone check at Start, a watchdog that killed "deaf" sessions, and an abort when you tapped Speak.
-- It started a new session before the old one had fully ended.
+**The native app.** A native iPhone app that used Apple's own speech framework worked on the phone (#9). We removed it (#11) to keep Cue a single web app, so this remains an option.
 
-Some of these were workarounds added to fix the problem. #18 removed them. Speech is now cancelled only when something is actually playing, sessions are stopped instead of aborted, and a new session starts only after the old one has ended.
+**Unusual words.** Safari's recognizer also can't be told which words to expect, so rare words can be misheard even when it is listening. For example, «Господи, перегарищем-то разит!» once came back as «…рящий тормозит». The speech lab page (#12, #17) compares other speech-to-text services as possible replacements.
 
-**This is still open.** After #18, the app on the iPhone still recognizes about two lines, then keeps listening for a few seconds and returns to the main screen. The real cause hasn't been found yet.
-
-**One real limit remains.** Safari's recognizer can't be told which words to expect, so rare or unusual words can still be misheard. For example, «Господи, перегарищем-то разит!» once came back as «…рящий тормозит». The speech lab page (#12, #17) compares other speech-to-text services for this case.
+If listening goes silent, you can still use **Type your line instead** to keep rehearsing.
 
 ## Development
 
