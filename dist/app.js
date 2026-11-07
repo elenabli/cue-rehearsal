@@ -135,7 +135,7 @@ function listen(automatic=false){
  try{rec.start();render();}catch(err){slog('#'+sid+' start() threw '+(err&&err.message));recognition=null;running=false;document.body.classList.remove('listening');feedback('Safari needs a tap to continue. Tap Speak.',true);render();}
 }
 
-slog('page loaded: '+navigator.userAgent);document.addEventListener('visibilitychange',()=>slog('page '+document.visibilityState));window.addEventListener('pagehide',()=>slog('page hidden/closed'));
+slog('page loaded'+((window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches)||navigator.standalone?' from the Home Screen':' in a browser tab')+': '+navigator.userAgent);document.addEventListener('visibilitychange',()=>slog('page '+document.visibilityState));window.addEventListener('pagehide',()=>slog('page hidden/closed'));
 $('copy-speech-log').onclick=async()=>{const text=speechLog.join('\n')||'(empty)';let ok=false;try{await navigator.clipboard.writeText(text);ok=true;}catch{}if(!ok){const area=$('speech-log-text');area.hidden=false;area.value=text;area.select();}$('speech-log-message').textContent=ok?'Copied. Paste it in your message to Claude.':'Select the text below and copy it.';};
 $('clear-speech-log').onclick=()=>{speechLog=[];try{localStorage.removeItem('cue-speech-log');}catch{}$('speech-log-text').hidden=true;$('speech-log-message').textContent='Log cleared.';};
 $('start').onclick=()=>{slog('Start tapped');if(['directions','review'].includes(data.scenes[data.activeScene].kind)){selectScene(data.activeScene+1);return;}if(running){pause();return;}stopAudio();if(data.index>=lines.length)data.index=0;running=true;feedback();render();window.scrollTo(0,0);askForMic(playCurrent);};
