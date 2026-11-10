@@ -30,20 +30,28 @@ let lines;try{lines=sceneLines(data.scenes[data.activeScene]);if(!lines.length&&
 let roles=playRoles();if(!roles.length)roles=['ACTOR'];if(!roles.includes(data.role))data.role=roles[0];data.index=Math.max(0,Math.min(Number(data.index)||0,lines.length));
 let hint={key:'',words:0,open:false};
 // Marker: words of your line heard so far, from the recognizer's interim results; the whole line once it's accepted.
-let heard={key:'',count:0};
-function heardPrefix(text,said){const got=CueCore.normalize(said).split(' ').filter(Boolean);let n=0,j=0;text.split(/\s+/).every((w,i)=>{const parts=CueCore.normalize(w).split(' ').filter(Boolean);if(!parts.length)return true;const bare=CueCore.normalize(w.replace(/[-‐‑](?:то|ка|таки|де)(?!\p{L})/giu,'')).split(' ').filter(Boolean);const use=parts.every((p,x)=>got[j+x]===p)?parts:bare.length&&bare.every((p,x)=>got[j+x]===p)?bare:null;if(!use)return false;j+=use.length;n=i+1;return true;});return n;}
-function paintHeard(){const line=lines[data.index];if(!running||!line||line.speaker!==data.role)return;const words=line.text.split(/\s+/),said=pendingAdvance?words.length:heard.key===data.activeScene+':'+data.index?heard.count:0,shown=data.hide?Math.max(said,hint.words):words.length;if(!data.hide&&!said)return;
+// It follows long lines through misheard words: words passed over but not heard stay unmarked (missed).
+let heard={key:'',count:0,missed:[]};
+function heardPrefix(text,said){return CueCore.progress(text,said).heard;}
+function paintHeard(){const line=lines[data.index];if(!running||!line||line.speaker!==data.role)return;const words=line.text.split(/\s+/),current=!pendingAdvance&&heard.key===data.activeScene+':'+data.index,said=pendingAdvance?words.length:current?heard.count:0,missed=new Set(current?heard.missed||[]:[]),shown=data.hide?Math.max(said,hint.words):words.length;if(!data.hide&&!said)return;
  // Hidden lines show as blanks shaped like the words; hints and correctly spoken words fill them in.
- const el=$(data.hide?'hint-text':'current-line');if(data.hide){el.hidden=false;$('hidden-copy').hidden=true;}el.replaceChildren();words.forEach((w,i)=>{const s=document.createElement('span');s.textContent=i<shown?w:w.replace(/[\p{L}\p{N}]/gu,'_');s.className=i<said?'heard':i<shown?'':'blank';el.append(s);if(i<words.length-1)el.append(' ');});}
-// Pocket mode (pocket.js): tones and haptics say right or wrong, so the phone can stay in a pocket. It always listens by itself.
-const Pocket=()=>data.pocket&&window.CuePocket?window.CuePocket:null;const autoMic=()=>data.autoMic||!!Pocket();let pocketMisses={key:'',count:0};
-let running=false,recognition=null,speaking=false,runId=0,advanceTimer=null,voices=[],retryTimer=null,pendingAdvance=false,partialSpeech='',silenceRetries=0,activeUtterance=null,primer=null,micReady=false,mismatchShown=false,lastSession=null,audioEventsSeen=false,deafRetries=0;
+ const el=$(data.hide?'hint-text':'current-line');if(data.hide){el.hidden=false;$('hidden-copy').hidden=true;}el.replaceChildren();words.forEach((w,i)=>{const s=document.createElement('span'),miss=missed.has(i),open=i<shown&&!(data.hide&&miss&&i>=hint.words);s.textContent=open?w:w.replace(/[\p{L}\p{N}]/gu,'_');s.className=i<said&&!miss?'heard':open?'':'blank';el.append(s);if(i<words.length-1)el.append(' ');});}
+// Hands-free mode (pocket.js): tones say right or wrong and a pause brings a spoken hint, so the phone can stay in a pocket. It always listens by itself.
+const Pocket=()=>data.pocket&&window.CuePocket?window.CuePocket:null;const autoMic=()=>data.autoMic||!!Pocket();let pocketMisses={key:'',count:0},spokenHint={key:'',upTo:0};
+let sessionCount=0,running=false,recognition=null,speaking=false,runId=0,advanceTimer=null,voices=[],retryTimer=null,pendingAdvance=false,partialSpeech='',silenceRetries=0,activeUtterance=null,primer=null,micReady=false,mismatchShown=false,lastSession=null,audioEventsSeen=false,deafRetries=0;
 const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+// Thinking time. A pause after the start of a line keeps listening (up to THINK_PAUSE seconds in one session, then fresh
+// sessions that remember what was said) instead of judging half a line. After THINK_TRIES quiet sessions the line is checked as said.
+// Before any words, SILENT_TRIES quiet sessions (about 9 s each) pass before the rehearsal stops to wait for a tap.
+const THINK_PAUSE=6,THINK_TRIES=3,SILENT_TRIES=5;
 try{navigator.permissions?.query({name:'microphone'}).then(status=>{micReady=status.state==='granted';status.onchange=()=>{micReady=status.state==='granted';};}).catch(()=>{});}catch{}
 function persist(){if(data.scenes?.[data.activeScene])data.scenes[data.activeScene].index=data.index;try{localStorage.setItem('cue-v1',JSON.stringify(data));}catch{storageFailed=true;$('storage-notice').textContent='Browser storage is unavailable. Export your script to keep a copy.';}}
-function feedback(message='',error=false){mismatchShown=false;$('feedback').textContent=message;$('feedback').classList.toggle('error',error);}
-function stopAudio(){runId++;clearTimeout(advanceTimer);clearTimeout(retryTimer);pendingAdvance=false;partialSpeech='';silenceRetries=0;deafRetries=0;if(recognition){const old=recognition;recognition=null;old.onend=null;old.onresult=null;old.onerror=null;old.abort();}if(primer){const old=primer;primer=null;old.onstart=old.onend=old.onerror=null;try{old.abort();}catch{}}window.speechSynthesis?.cancel();activeUtterance=null;speaking=false;document.body.classList.remove('listening');}
-function pause(){running=false;stopAudio();render();}
+// Speech log: what the mic and voice did, kept across reloads so a stop on the iPhone can be traced. Settings → Speech log → Copy.
+let speechLog=[];try{const saved=JSON.parse(localStorage.getItem('cue-speech-log'));if(Array.isArray(saved))speechLog=saved;}catch{}
+function slog(message){const d=new Date();const stamp=d.toTimeString().slice(0,8)+'.'+String(d.getMilliseconds()).padStart(3,'0');speechLog.push(stamp+'  '+message);if(speechLog.length>500)speechLog=speechLog.slice(-500);try{localStorage.setItem('cue-speech-log',JSON.stringify(speechLog));}catch{}}
+function feedback(message='',error=false){if(message)slog((error?'SCREEN (error): ':'screen: ')+message.split('\n')[0]);mismatchShown=false;$('feedback').textContent=message;$('feedback').classList.toggle('error',error);}
+function stopAudio(){slog('stop audio');closeLong();spokenHint={key:'',upTo:0};runId++;clearTimeout(advanceTimer);clearTimeout(retryTimer);pendingAdvance=false;partialSpeech='';silenceRetries=0;deafRetries=0;if(recognition){const old=recognition;recognition=null;old.onresult=old.onerror=null;old.onend=()=>{if(lastSession&&lastSession.rec===old)lastSession.ended=true;};try{old.stop();}catch{}}quietVoice();activeUtterance=null;speaking=false;document.body.classList.remove('listening');}
+function pause(){if(running)slog('pause');running=false;stopAudio();render();}
 function showView(name){pause();document.querySelectorAll('.view').forEach(el=>el.hidden=el.id!==name);document.querySelectorAll('.nav').forEach(el=>el.classList.toggle('active',el.dataset.view===name));$('crumb').textContent={rehearse:'Rehearse',script:'My script',settings:'Settings'}[name];window.scrollTo({top:0,behavior:'smooth'});}
 function render(){const scene=data.scenes[data.activeScene],needsReview=scene.kind==='review',directionsOnly=['directions','review'].includes(scene.kind),line=lines[data.index],mine=line?.speaker===data.role,complete=!line&&!directionsOnly;
  $('play-title').textContent=data.title;$('scene-subtitle').textContent=`${data.scenes[data.activeScene].title} · ${data.activeScene+1} of ${data.scenes.length}`;
@@ -73,13 +81,28 @@ function render(){const scene=data.scenes[data.activeScene],needsReview=scene.ki
 // so iPhone auto-lock would otherwise end a hands-free run.
 let wakeLock=null,wakeLockPending=false;
 function syncWakeLock(){const want=running&&!document.hidden;if(want&&!wakeLock&&!wakeLockPending&&navigator.wakeLock){wakeLockPending=true;navigator.wakeLock.request('screen').then(lock=>{wakeLockPending=false;if(!running){lock.release().catch(()=>{});return;}wakeLock=lock;lock.addEventListener('release',()=>{if(wakeLock===lock)wakeLock=null;});}).catch(()=>{wakeLockPending=false;});}else if(!want&&wakeLock){const lock=wakeLock;wakeLock=null;lock.release().catch(()=>{});}}
-// Pocket mode while running: in the iPhone app the screen goes dark against the pocket (as in a phone call) and the app keeps running; a guard ignores stray taps.
+// Hands-free mode while running: a guard ignores stray taps in the pocket (press and hold pauses).
 let pocketScreen=false;function syncPocket(){const want=running&&!!Pocket()&&!document.hidden;document.body.classList[want?'add':'remove']('pocket');if(want!==pocketScreen){pocketScreen=want;window.CuePocket?.screen(want);}}
-function pocketFinale(){const P=Pocket();if(!P)return;P.play('done',()=>{const text=P.phrase('done',data.language);if(text&&!running)speak(text);});}
-function speak(text,onDone){if(!window.speechSynthesis){feedback('Spoken cues are unavailable in this browser. Read the cue on screen.',true);return false;}const id=runId;window.speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(text);activeUtterance=u;u.lang=data.language;u.rate=Number(data.pace);const selected=voices.find(v=>v.voiceURI===data.voice)||voices.find(v=>v.lang===data.language)||voices.find(v=>v.lang.startsWith(data.language.split('-')[0]));if(selected)u.voice=selected;speaking=true;render();u.onend=()=>{if(id!==runId)return;activeUtterance=null;speaking=false;render();onDone?.();};u.onerror=()=>{if(id!==runId)return;activeUtterance=null;speaking=false;running=false;render();feedback('The voice stopped. Tap Resume to try again.',true);};window.speechSynthesis.speak(u);return true;}
+function pocketTone(kind,then){const P=Pocket();if(!P){then?.();return;}slog('tone: '+kind);P.play(kind,then);}
+function pocketFinale(){const P=Pocket();if(!P)return;pocketTone('done',()=>{const text=P.phrase('done',data.language);if(text&&!running)speak(text);});}
+// Stuck for good (hints used up, or no sound at all): stop, and say so out loud.
+function pocketPause(){const P=Pocket();pause();feedback('Paused. Tap Start when you’re ready to go on.',true);pocketTone('pause',()=>{const text=P?.phrase('pause',data.language);if(text&&!running)speak(text);});}
+// Spoken hints: after a quiet spell the next few words of the line are spoken. Staying quiet makes the next hint longer, up to the whole line.
+
+function nextHint(l,said){const key=data.activeScene+':'+data.index;if(spokenHint.key!==key)spokenHint={key,upTo:0};const words=l.text.split(/\s+/);if(spokenHint.upTo>=words.length)return '';const from=said?Math.min(CueCore.progress(l.text,said).heard,words.length-1):0;const to=Math.min(words.length,Math.max(from,spokenHint.upTo)+3);spokenHint.upTo=to;hint.words=Math.max(hint.words,to);return words.slice(from,to).join(' ');}
+// A missed line in hands-free mode: 1st miss → the cue again, 2nd → your line read aloud, 3rd → read aloud and the scene moves on.
+function pocketMiss(lineIndex,token,resume){const P=Pocket(),l=lines[lineIndex],key=data.activeScene+':'+lineIndex;const ok=()=>token===runId&&lineIndex===data.index&&running;const say=(text,then)=>{if(!speak(text,then))then();};
+ spokenHint={key:'',upTo:0};if(pocketMisses.key!==key)pocketMisses={key,count:0};const step=P.afterMiss(++pocketMisses.count);slog('hands-free: miss '+pocketMisses.count+' → '+step);
+ pocketTone('wrong',()=>{if(!ok())return;if(step==='cue')cueAgain(()=>{if(ok())resume();});else if(step==='say-line')say(l.text,()=>{if(ok())resume();});else say(l.text,()=>{if(ok())pocketTone('next',()=>{if(ok())advance();});});});}
+// iPhone sometimes accepts an utterance and never plays it (no onstart). Then the scene stalled. Speak it once more, and if it's still silent, go on: the line is on screen.
+function speak(text,onDone,attempt=0){if(!window.speechSynthesis){feedback('Spoken cues are unavailable in this browser. Read the cue on screen.',true);return false;}const id=runId;const waited=quietVoice();const u=new SpeechSynthesisUtterance(text);activeUtterance=u;u.lang=data.language;u.rate=Number(data.pace);const selected=voices.find(v=>v.voiceURI===data.voice)||voices.find(v=>v.lang===data.language)||voices.find(v=>v.lang.startsWith(data.language.split('-')[0]));if(selected)u.voice=selected;speaking=true;render();slog('voice: speak «'+text.slice(0,40)+'»'+(waited?' after 250 ms':'')+(attempt?' (again)':''));let started=false;
+ const silent=setTimeout(()=>{if(started||id!==runId||activeUtterance!==u)return;activeUtterance=null;if(!attempt){slog('voice: silent for 2.5 s, speaking again');window.speechSynthesis.cancel();setTimeout(()=>{if(id===runId)speak(text,onDone,1);},300);}else{slog('voice: still silent, going on');speaking=false;render();onDone?.();}},2500);
+ u.onstart=()=>{started=true;voiceUnlocked=true;slog('voice: onstart');};u.onend=()=>{slog('voice: onend'+(id!==runId||activeUtterance!==u?' (old)':''));clearTimeout(silent);if(id!==runId||activeUtterance!==u)return;activeUtterance=null;speaking=false;render();onDone?.();};u.onerror=e=>{slog('voice: onerror '+(e&&e.error));clearTimeout(silent);if(id!==runId||activeUtterance!==u)return;activeUtterance=null;speaking=false;running=false;render();feedback('The voice stopped. Tap Resume to try again.',true);};if(waited)setTimeout(()=>{if(id===runId&&activeUtterance===u)window.speechSynthesis.speak(u);},250);else window.speechSynthesis.speak(u);return true;}
+// On iPhone, cancel() straight before speak() can make the next line silent. Cancel only when something is actually playing, and say whether the caller should wait a moment.
+function quietVoice(){const s=window.speechSynthesis;if(!s||!(s.speaking||s.pending))return false;slog('voice: cancel (was playing)');s.cancel();return true;}
 function advance(){pendingAdvance=false;partialSpeech='';silenceRetries=0;deafRetries=0;data.index++;$('typed').value='';feedback();render();if(running)playCurrent();}
-function playCurrent(){if(!running||data.index>=lines.length){const finished=running&&lines.length>0&&data.index>=lines.length;running=false;render();if(finished)pocketFinale();return;}const l=lines[data.index];if(l.speaker!==data.role){if(!speak(l.text,()=>{if(running)advance();})){running=false;render();}}else{render();feedback('Your turn. Say your line.');if(autoMic())listen(true);}}
-function check(transcripts){const l=lines[data.index];if(!l||l.speaker!==data.role||pendingAdvance)return;const correct=transcripts.some(t=>CueCore.matches(l.text,t));if(correct){pendingAdvance=true;partialSpeech='';Pocket()?.play('correct');feedback('Correct ✓');render();const token=runId;advanceTimer=setTimeout(()=>{if(token===runId)advance();},950);}else showMismatch(l.text,transcripts);}
+function playCurrent(){if(!running||data.index>=lines.length){const finished=running&&lines.length>0&&data.index>=lines.length;running=false;render();if(finished)pocketFinale();return;}const l=lines[data.index];if(l.speaker!==data.role){if(!speak(l.text,()=>{if(running)advance();})){running=false;render();}}else{render();feedback('Your turn. Say your line.');if(autoMic()){if(longMode())beginTurn();else listen(true);}}}
+function check(transcripts){const l=lines[data.index];if(!l||l.speaker!==data.role||pendingAdvance)return;const correct=transcripts.some(t=>CueCore.matches(l.text,t));if(correct){pendingAdvance=true;partialSpeech='';pocketTone('correct');feedback('Correct ✓');render();const token=runId;advanceTimer=setTimeout(()=>{if(token===runId)advance();},950);}else showMismatch(l.text,transcripts);}
 // Mark what didn't match so an actor can tell a forgotten word from a misheard one. Hidden lines show blanks, not the missing words.
 function showMismatch(expected,transcripts){const heard=transcripts.filter(t=>t&&t.trim());const prompt=data.hide?(running?' Tap Hint for the first words.':' Reveal the line if you need a prompt.'):'';
  const ops=heard.map(t=>CueCore.diffWords(expected,t)).sort((a,b)=>a.filter(o=>o.type!=='same').length-b.filter(o=>o.type!=='same').length)[0]||[];
@@ -89,79 +112,124 @@ function showMismatch(expected,transcripts){const heard=transcripts.filter(t=>t&
  feedback('',true);$('feedback').replaceChildren(head,line,legend);if(running)$('feedback').append(countItButton());mismatchShown=true;}
 // Recognition sometimes can't hear a word right however clearly it's said («разит» → «рящий тормозит»). The actor knows they said it: let them count it and go on.
 function countItButton(){const b=document.createElement('button');b.className='count-it';b.type='button';b.textContent='I said it right ✓ Count it';b.onclick=()=>{const l=lines[data.index];if(!running||!l||l.speaker!==data.role||pendingAdvance)return;stopAudio();feedback();advance();};return b;}
-// Safari asks for the microphone the first time recognition starts. When a partner speaks first, that would be after their cue, so open and close the mic during the Start tap instead.
-function askForMic(then){const l=lines[data.index];if(!Recognition||micReady||!autoMic()||!l||l.speaker===data.role||!lines.some(x=>x.speaker===data.role)){then();return;}
- const token=runId,rec=new Recognition();primer=rec;let done=false;const go=()=>{if(done)return;done=true;if(primer===rec)primer=null;rec.onstart=rec.onend=rec.onerror=null;try{rec.abort();}catch{}if(token===runId&&running)then();};
- rec.lang=data.language;rec.onstart=()=>{micReady=true;go();};rec.onerror=e=>{if(['not-allowed','service-not-allowed'].includes(e.error)&&token===runId){done=true;primer=null;running=false;render();feedback('Allow the microphone for this site in Safari settings, then tap Start.',true);return;}go();};rec.onend=go;
- try{rec.start();}catch{go();}}
+// Safari asks for the microphone the first time listening starts, after the partner's first cue. An earlier open-and-abort mic check at Start is gone: killing sessions is what broke listening on iPhone.
+function askForMic(then){then();}
+// One long listening session (iPhone). Opening and closing a session for every line makes Safari's mic go deaf and, with it, the partner's voice. Another rehearsal app that keeps its voice working on iPhone listens differently, so here the mic opens once per run and stays open: what's heard while the partner speaks is ignored, and a line is checked from what's heard on the actor's turn.
+const isIOS=/iP(hone|ad|od)/.test(navigator.userAgent||'')||(/Macintosh/.test(navigator.userAgent||'')&&navigator.maxTouchPoints>1);
+// iPhone plays speechSynthesis only after it has been started once from a tap. When the scene opens with the actor's own line, the first partner line used to be spoken later, outside any tap, and stayed silent. So a tap that doesn't speak anything itself plays a silent utterance to unlock the voice.
+let voiceUnlocked=false;
+function unlockVoice(){if(voiceUnlocked||speaking||!window.speechSynthesis)return;try{const u=new SpeechSynthesisUtterance('а');u.volume=0;u.rate=2;u.lang=data.language;u.onstart=()=>{voiceUnlocked=true;slog('voice: unlocked by tap');};u.onerror=e=>slog('voice: unlock error '+(e&&e.error));slog('voice: unlocking (silent utterance in the tap)');window.speechSynthesis.speak(u);}catch(err){slog('voice: unlock threw '+(err&&err.message));}}
+function longMode(){return !!Recognition&&autoMic()&&(data.longSession===true||(data.longSession!==false&&isIOS));}
+let deafTimer=null,longRec=null,longText='',turnFrom=-1,turnStartedAt=0,quietTimer=null,longRestarts=0;
+// Thinking time in the one-session mode. What was said earlier in the turn is kept in turnCarry when the mic restarts or a hint is
+// spoken, so a pause never throws away the start of the line. A start that fits the line waits: in hands-free mode a spoken hint
+// comes after HINT_AFTER ms of quiet; otherwise the half line is checked after JUDGE_AFTER ms so the missing words show.
+let turnCarry='',thinkTimer=null;const HINT_AFTER=5000,JUDGE_AFTER=15000;
+function turnSaid(){return (turnCarry+' '+(turnFrom>=0?longText.slice(Math.min(turnFrom,longText.length)):'')).replace(/\s+/g,' ').trim();}
+function openLong(){if(longRec||!running||!longMode())return;const rec=new Recognition();longRec=rec;const sid=++sessionCount;longText='';if(turnFrom>=0)turnFrom=0;rec.lang=data.language;rec.continuous=true;rec.interimResults=true;slog('#'+sid+' start (one session for the scene)');
+ rec.onstart=()=>{slog('#'+sid+' onstart');micReady=true;};rec.onaudiostart=()=>slog('#'+sid+' onaudiostart');rec.onspeechstart=()=>slog('#'+sid+' onspeechstart');
+ rec.onresult=e=>{if(longRec!==rec)return;longRestarts=0;clearTimeout(deafTimer);let text='';for(let i=0;i<e.results.length;i++)text+=e.results[i][0].transcript+' ';longText=text.replace(/\s+/g,' ').trim();const last=e.results[e.results.length-1];slog('#'+sid+' onresult '+(last.isFinal?'final':'interim')+(turnFrom<0?' (ignored, not your turn)':'')+': '+longText.slice(-60));onLongHeard();};
+ rec.onerror=e=>{slog('#'+sid+' onerror '+e.error+(e.message?' ('+e.message+')':''));if(longRec!==rec)return;if(['not-allowed','service-not-allowed'].includes(e.error)){longRec=null;running=false;endTurn();render();feedback('Allow the microphone for this site in Safari settings, then tap Start.',true);}};
+ rec.onend=()=>{slog('#'+sid+' onend');if(longRec!==rec)return;longRec=null;if(turnFrom>=0)turnCarry=turnSaid();longText='';if(turnFrom>=0)turnFrom=0;if(speaking){slog('mic closed while the partner speaks; it reopens on your turn');return;}if(running&&longMode()){if(++longRestarts>5){endTurn();feedback('The microphone keeps stopping. Tap Speak to go on.',true);return;}const token=runId;setTimeout(()=>{if(token===runId&&running&&!longRec)openLong();},300);}};
+ try{rec.start();}catch(err){slog('#'+sid+' start() threw '+(err&&err.message));longRec=null;}}
+function closeLong(){clearTimeout(quietTimer);clearTimeout(thinkTimer);clearTimeout(deafTimer);turnFrom=-1;if(!longRec)return;const rec=longRec;longRec=null;rec.onresult=rec.onerror=null;rec.onend=()=>slog('long session closed');try{rec.stop();}catch{}}
+// keep: go on with the same attempt (after a spoken hint); otherwise a fresh attempt at the line.
+function beginTurn(keep=false){clearTimeout(quietTimer);if(!keep){turnCarry='';spokenHint={key:'',upTo:0};}turnFrom=longText.length;turnStartedAt=Date.now();document.body.classList.add('listening');if(!mismatchShown)feedback(keep||partialSpeech?'Keep going…':'Listening… Say your line, then pause.');render();if(!longRec)openLong();if(Pocket())armThink();
+ // An open mic that hears nothing for 10 s on the actor's turn is deaf: close it, and it reopens.
+ clearTimeout(deafTimer);const token=runId;deafTimer=setTimeout(()=>{if(token!==runId||turnFrom<0||!longRec)return;slog('no speech heard for 10 s: reopening the mic');try{longRec.stop();}catch{}},10000);}
+// The mic may still be catching the partner's last words when the turn starts. Try the heard text also without leading words from the partner's cue.
+function withoutCue(said){const prev=data.index>0?lines[data.index-1]:null;if(!prev||prev.speaker===data.role)return [said];const cue=new Set(CueCore.normalize(prev.text).split(' '));const words=said.split(/\s+/);let i=0;while(i<words.length-1&&cue.has(CueCore.normalize(words[i])))i++;return i?[said,words.slice(i).join(' ')]:[said];}
+function endTurn(){clearTimeout(quietTimer);clearTimeout(thinkTimer);clearTimeout(deafTimer);turnFrom=-1;document.body.classList.remove('listening');}
+function onLongHeard(){if(turnFrom<0)return;const l=lines[data.index];if(!l||l.speaker!==data.role||speaking||pendingAdvance)return;
+ // The partner's last words can arrive just after the voice ends: skip them.
+ if(Date.now()-turnStartedAt<500){turnFrom=longText.length;return;}
+ if(longText.length<turnFrom)turnFrom=0;clearTimeout(thinkTimer);const said=turnSaid();if(!said)return;const tries=withoutCue(said);
+ heard={key:data.activeScene+':'+data.index,count:heardPrefix(l.text,said)};paintHeard();feedback('Listening…\n“'+said+'”');
+ if(tries.some(t=>CueCore.matches(l.text,t))){endTurn();check(tries);return;}
+ clearTimeout(quietTimer);const token=runId,lineIndex=data.index;quietTimer=setTimeout(()=>{if(token!==runId||lineIndex!==data.index||turnFrom<0)return;const now=withoutCue(turnSaid());
+  // A fair start of the line (a misheard word allowed) is the actor thinking: wait, don't judge.
+  if(now.some(t=>CueCore.progress(l.text,t).partial)){feedback('Keep going…');armThink();return;}
+  missedTurn(now,token,lineIndex);},1800);}
+function missedTurn(said,token,lineIndex){endTurn();check(said);if(pendingAdvance||!running)return;const again=()=>{if(token===runId&&running&&lineIndex===data.index)beginTurn();};if(Pocket())pocketMiss(lineIndex,token,again);else cueAgain(again);}
+// After a quiet spell in the turn: a spoken hint (hands-free), or, after a long one, check the half line.
+function armThink(){clearTimeout(thinkTimer);const token=runId,lineIndex=data.index;thinkTimer=setTimeout(()=>{const l=lines[lineIndex];if(token!==runId||lineIndex!==data.index||turnFrom<0||speaking||pendingAdvance||!l)return;const said=turnSaid();
+  if(!Pocket()){if(said)missedTurn(withoutCue(said),token,lineIndex);return;}
+  const text=nextHint(l,said);if(!text){pocketPause();return;}
+  slog('hint: «'+text+'»');turnCarry=said;turnFrom=-1;clearTimeout(deafTimer);if(!speak(text,()=>{if(token===runId&&running&&lineIndex===data.index)beginTurn(true);}))beginTurn(true);},Pocket()?HINT_AFTER:JUDGE_AFTER);}
 // Start the next session only once the last one has really ended: on iOS a session started while the old one still holds the mic can't hear anything.
 // iOS often goes deaf when listening restarts straight after a heard attempt, but listening after the partner's voice works. So after a wrong attempt the partner gives the cue again (or says «Ещё раз» on a first line), then the mic opens.
 function cueAgain(then){const l=lines[data.index],cue=data.index>0&&lines[data.index-1].speaker!==data.role?lines[data.index-1].text:'';const lang=data.language.split('-')[0];const text=cue||({ru:'Ещё раз.',uk:'Ще раз.',en:'Again.'}[lang]||'');if(!l||!text||!speak(text,then))then();}
 function startWhenFree(go,waited=0){const last=lastSession;if(!last||last.ended||waited>=1500){go();return;}const token=runId;retryTimer=setTimeout(()=>{if(token===runId)startWhenFree(go,waited+150);},150);}
-// Pocket mode, after a miss or a silence: the actor hears what went wrong and what to say, and is never left stuck.
-function pocketRetry(lineIndex,wrong,token){const P=Pocket(),l=lines[lineIndex],key=data.activeScene+':'+lineIndex;const ok=()=>token===runId&&lineIndex===data.index&&running;
- const again=()=>{if(ok())listen(true);};const say=(text,then)=>{if(!speak(text,then))then();};const wait=go=>{retryTimer=setTimeout(()=>startWhenFree(()=>{if(ok())go();}),400);};
- if(wrong){if(pocketMisses.key!==key)pocketMisses={key,count:0};const step=P.afterMiss(++pocketMisses.count);
-  P.play('wrong',()=>{if(!ok())return;if(step==='cue')wait(()=>cueAgain(again));else if(step==='say-line')wait(()=>say(l.text,again));
-   else wait(()=>say(l.text,()=>{if(ok())P.play('next',()=>{if(ok()){stopAudio();advance();}});}));});return;}
- const step=P.afterSilence(silenceRetries);
- if(step==='pause'){running=false;render();feedback('I can’t hear you. Tap Start when you’re ready to go on.',true);P.play('pause',()=>{const text=P.phrase('pause',data.language);if(text&&!running)speak(text);});return;}
- if(step==='first-words'){const words=l.text.split(/\s+/);wait(()=>say(words.slice(0,3).join(' '),again));}else if(step==='say-line')wait(()=>say(l.text,again));else wait(again);}
+// Hands-free mode, one session per line (not iPhone): after a miss or a quiet session the actor hears what to do next.
+function pocketRetry(lineIndex,wrong,token){const l=lines[lineIndex],ok=()=>token===runId&&lineIndex===data.index&&running;const again=()=>{if(ok())listen(true);};const wait=go=>{retryTimer=setTimeout(()=>startWhenFree(()=>{if(ok())go();}),400);};
+ if(wrong){partialSpeech='';pocketMiss(lineIndex,token,()=>wait(again));return;}
+ // The first quiet session just listens again; after that each one brings a spoken hint, and what was said before is kept.
+ if(!partialSpeech&&silenceRetries<2){wait(again);return;}const text=nextHint(l,partialSpeech);if(!text){pocketPause();return;}slog('hint: «'+text+'»');wait(()=>{if(!speak(text,again))again();});}
 function listen(automatic=false,pinged=false){
  if(!Recognition){feedback('Voice input isn’t available here. Open the app in Safari, or type your line.',true);return;}
- if(!lines[data.index]||lines[data.index].speaker!==data.role||speaking||pendingAdvance)return;
- // Pocket mode: a soft ping says the mic is opening.
- if(automatic&&!pinged&&!recognition&&Pocket()){const token=runId,lineIndex=data.index;Pocket().play('ready',()=>{if(token===runId&&lineIndex===data.index&&running)listen(true,true);});return;}
- // A tap while listening starts over with a fresh session: on iOS a session started from a tap is the one that reliably hears.
- if(recognition){if(automatic)return;const old=recognition;recognition=null;old.onresult=old.onerror=null;old.onend=()=>{if(lastSession&&lastSession.rec===old)lastSession.ended=true;};try{old.abort();}catch{}}
+ if(longMode()&&running){const l=lines[data.index];if(l&&l.speaker===data.role&&!speaking&&!pendingAdvance){slog('tap: listen again (one session)');beginTurn();}return;}
+ if(automatic&&!pinged&&!recognition&&!partialSpeech&&!silenceRetries&&Pocket()&&lines[data.index]?.speaker===data.role){const token=runId,lineIndex=data.index;pocketTone('ready',()=>{if(token===runId&&lineIndex===data.index&&running)listen(true,true);});return;}
+ if(!lines[data.index]||lines[data.index].speaker!==data.role||speaking||pendingAdvance){slog('listen skipped'+(speaking?' (voice playing)':'')+(pendingAdvance?' (advancing)':''));return;}
+ // A tap while listening starts over: stop the old session, then open a fresh one once it has ended.
+ if(recognition){if(automatic){slog('listen skipped (already listening)');return;}slog('tap: stop the old session, then start again');const old=recognition;recognition=null;old.onresult=old.onerror=null;old.onend=()=>{if(lastSession&&lastSession.rec===old)lastSession.ended=true;};try{old.stop();}catch{}document.body.classList.remove('listening');clearTimeout(retryTimer);startWhenFree(()=>listen(false));return;}
  deafRetries=automatic?deafRetries:0;
  if(!running&&!automatic)running=true;
- clearTimeout(retryTimer);const rec=new Recognition();recognition=rec;const session={rec,ended:false};lastSession=session;rec.lang=data.language;rec.interimResults=true;rec.continuous=false;rec.maxAlternatives=5;
- const token=runId,lineIndex=data.index;heard={key:'',count:0};let finals=[],interim='',failed=false,retryAllowed=true,ended=false,watchdog=null,audio=false,deaf=false;
+ clearTimeout(retryTimer);const rec=new Recognition();recognition=rec;const session={rec,ended:false};lastSession=session;const sid=++sessionCount;slog('#'+sid+' start ('+(automatic?'auto':'tap')+'), line '+(data.index+1));rec.onsoundstart=()=>slog('#'+sid+' onsoundstart');rec.onspeechstart=()=>slog('#'+sid+' onspeechstart');rec.lang=data.language;rec.interimResults=true;rec.continuous=false;rec.maxAlternatives=5;
+ const token=runId,lineIndex=data.index;heard={key:'',count:0,missed:[]};let finals=[],interim='',failed=false,retryAllowed=true,ended=false,watchdog=null,audio=false,deaf=false;
  const candidatesFor=rows=>{let combined=[partialSpeech],fresh=[''];for(const row of rows){combined=combined.flatMap(prefix=>row.map(text=>(prefix+' '+text).trim())).slice(0,25);fresh=fresh.flatMap(prefix=>row.map(text=>(prefix+' '+text).trim())).slice(0,25);}return [...new Set(partialSpeech?[...combined,...fresh]:combined)];};
  // iOS Safari can keep a session open without ever reporting results, which left the mic on but deaf. Stop a quiet session, and drop it if it won't stop.
- const arm=ms=>{clearTimeout(watchdog);watchdog=setTimeout(()=>{if(ended||recognition!==rec)return;try{rec.stop();}catch{}watchdog=setTimeout(()=>{if(ended||recognition!==rec)return;rec.onresult=rec.onerror=null;rec.onend=()=>{session.ended=true;};try{rec.abort();}catch{}finish();},1500);},ms);};
- rec.onaudiostart=()=>{audio=true;audioEventsSeen=true;};
- // After a failed attempt iOS can open a session whose mic never delivers sound. Once this browser has shown it reports audio, a session without it is deaf: replace it.
- rec.onstart=()=>{micReady=true;
-  if(audioEventsSeen)setTimeout(()=>{if(ended||recognition!==rec||audio||finals.length||interim)return;deaf=true;rec.onresult=rec.onerror=null;rec.onend=()=>{session.ended=true;};try{rec.abort();}catch{}finish();},2500);
+ const arm=ms=>{clearTimeout(watchdog);watchdog=setTimeout(()=>{if(ended||recognition!==rec)return;slog('#'+sid+' watchdog: stop()');try{rec.stop();}catch{}watchdog=setTimeout(()=>{if(ended||recognition!==rec)return;slog('#'+sid+' watchdog: no onend, abort()');rec.onresult=rec.onerror=null;rec.onend=()=>{session.ended=true;};try{rec.abort();}catch{}finish();},1500);},ms);};
+ rec.onaudiostart=()=>{slog('#'+sid+' onaudiostart');audio=true;audioEventsSeen=true;};
+ rec.onstart=()=>{slog('#'+sid+' onstart');micReady=true;
   arm(9000);document.body.classList.add('listening');if(!mismatchShown)feedback(partialSpeech?'Keep going…':'Listening… Say your line, then pause.');render();};
- rec.onresult=e=>{if(token!==runId||lineIndex!==data.index)return;audio=true;deafRetries=0;arm(3000);interim='';finals=[];for(let i=0;i<e.results.length;i++){const result=e.results[i];if(result.isFinal)finals.push(Array.from(result).map(a=>a.transcript));else interim+=result[0].transcript;}heard={key:data.activeScene+':'+lineIndex,count:heardPrefix(lines[lineIndex]?.text||'',finals.map(a=>a[0]).join(' ')+' '+interim)};paintHeard();
+ rec.onresult=e=>{{const last=e.results[e.results.length-1];slog('#'+sid+' onresult '+(last.isFinal?'final':'interim')+': '+last[0].transcript);}if(token!==runId||lineIndex!==data.index)return;audio=true;deafRetries=0;const lineText=lines[lineIndex]?.text||'';interim='';finals=[];for(let i=0;i<e.results.length;i++){const result=e.results[i];if(result.isFinal)finals.push(Array.from(result).map(a=>a.transcript));else interim+=result[0].transcript;}
+  const said=finals.map(a=>a[0]).join(' ')+' '+interim,progress=[CueCore.progress(lineText,said),...(partialSpeech?[CueCore.progress(lineText,partialSpeech+' '+said)]:[])].sort((a,b)=>b.heard-a.heard)[0];
+  heard={key:data.activeScene+':'+lineIndex,count:progress.heard,missed:progress.missed};paintHeard();
+  // Halfway through the line and pausing: the actor is remembering the rest, so wait longer before ending the attempt.
+  arm(progress.partial?THINK_PAUSE*1000:3000);
   feedback('Listening…\n“'+[partialSpeech,...finals.map(r=>r[0]),interim].filter(Boolean).join(' ')+'”');
-  if(finals.length&&candidatesFor(finals).some(text=>CueCore.matches(lines[lineIndex].text,text)))rec.stop();
+  // No stop() here: the session ends by itself a moment after a final result, and stopping it as it ends left the next voice line or session silent on iPhone.
  };
- rec.onerror=e=>{if(token!==runId)return;failed=true;retryAllowed=e.error==='no-speech';if(!retryAllowed){running=false;partialSpeech='';}
-  const messages={'not-allowed':'Allow the microphone for this site in Safari settings, then tap Speak.','service-not-allowed':'Safari blocked automatic listening. Tap Speak, or type your line.','audio-capture':'The microphone isn’t available. Check it, then tap Speak.','network':'Check your internet connection, then tap Speak.','no-speech':'Didn’t catch that. Try again.','aborted':'Listening stopped. Tap Speak.'};feedback(messages[e.error]||'Couldn’t recognize speech. Tap Speak to try again.',true);
+ rec.onerror=e=>{slog('#'+sid+' onerror '+e.error+(e.message?' ('+e.message+')':''));if(token!==runId)return;failed=true;// iOS reports a session that heard nothing as 'aborted' (No speech detected). Like no-speech, listen again instead of stopping the rehearsal.
+  retryAllowed=['no-speech','aborted'].includes(e.error);if(!retryAllowed){running=false;partialSpeech='';}
+  // Silence is thinking time, not a failure: keep the screen as it is and listen again.
+  if(retryAllowed)return;
+  const messages={'not-allowed':'Allow the microphone for this site in Safari settings, then tap Speak.','service-not-allowed':'Safari blocked automatic listening. Tap Speak, or type your line.','audio-capture':'The microphone isn’t available. Check it, then tap Speak.','network':'Check your internet connection, then tap Speak.','no-speech':'Didn’t catch that. Try again.','aborted':'Didn’t catch that. Try again.'};feedback(messages[e.error]||'Couldn’t recognize speech. Tap Speak to try again.',true);
  };
- const finish=()=>{if(ended||recognition!==rec)return;ended=true;if(!deaf&&rec.onend===finish)session.ended=true;recognition=null;clearTimeout(watchdog);document.body.classList.remove('listening');if(token!==runId||lineIndex!==data.index)return;
+ const finish=()=>{slog('#'+sid+' onend'+(ended||recognition!==rec?' (ignored)':'')+', finals '+finals.length+(failed?', failed':''));if(ended||recognition!==rec)return;ended=true;if(!deaf&&rec.onend===finish)session.ended=true;recognition=null;clearTimeout(watchdog);document.body.classList.remove('listening');if(token!==runId||lineIndex!==data.index)return;
   // iOS sometimes ends a session without marking anything final; what it heard is still the actor's line.
   if(!finals.length&&interim.trim())finals=[[interim.trim()]];
-  if(deaf){deafRetries++;if(deafRetries>=2||!autoMic()||!running){render();feedback('The microphone stopped hearing. Tap Speak to go on.',true);if(running)Pocket()?.play('pause');return;}render();retryTimer=setTimeout(()=>startWhenFree(()=>{if(token===runId&&lineIndex===data.index&&running)listen(true);}),800);return;}
+  if(deaf){deafRetries++;if(deafRetries>=2||!autoMic()||!running){render();feedback('The microphone stopped hearing. Tap Speak to go on.',true);if(running)pocketTone('pause');return;}render();retryTimer=setTimeout(()=>startWhenFree(()=>{if(token===runId&&lineIndex===data.index&&running)listen(true);}),800);return;}
   let wrong=false;
   if(!failed&&finals.length){silenceRetries=0;const candidates=candidatesFor(finals);
    if(candidates.some(text=>CueCore.matches(lines[lineIndex].text,text)))check(candidates);
-   else{const expected=CueCore.normalize(lines[lineIndex].text);const prefix=candidates.filter(text=>{const value=CueCore.normalize(text);return value&&expected.startsWith(value+' ');}).sort((a,b)=>b.length-a.length)[0];if(prefix){partialSpeech=prefix;feedback('Good start. Carry on from where you stopped.');}else{partialSpeech='';check(candidates);wrong=!pendingAdvance;}}
-  }else if(retryAllowed){silenceRetries++;if(!failed)feedback('Didn’t hear the whole line. Please say it again.',true);}
-  if(!running&&!retryAllowed)Pocket()?.play('pause');
-  render();if(running&&autoMic()&&!pendingAdvance&&retryAllowed){if(Pocket()&&(wrong||silenceRetries))pocketRetry(lineIndex,wrong,token);else if(silenceRetries>=3){running=false;render();feedback('I can’t hear you. Tap Speak when you’re ready to go on.',true);}else{const again=()=>{if(token===runId&&lineIndex===data.index&&running)listen(true);};retryTimer=setTimeout(()=>startWhenFree(()=>{if(token!==runId||lineIndex!==data.index||!running)return;if(wrong)cueAgain(again);else again();}),600);}}
+   else{const prefix=candidates.filter(text=>CueCore.progress(lines[lineIndex].text,text).partial).sort((a,b)=>b.length-a.length)[0];if(prefix){partialSpeech=prefix;if(!mismatchShown)feedback('Keep going…');}else{partialSpeech='';check(candidates);wrong=!pendingAdvance;}}
+  }else if(retryAllowed){silenceRetries++;
+   // Stopped partway and stayed quiet: after the thinking time, check what was said so the missing words show.
+   if(!Pocket()&&partialSpeech&&silenceRetries>=THINK_TRIES){const said=partialSpeech;partialSpeech='';silenceRetries=0;check([said]);wrong=!pendingAdvance;}}
+  if(!running&&!retryAllowed)pocketTone('pause');
+  render();if(running&&autoMic()&&!pendingAdvance&&retryAllowed){if(Pocket()&&(wrong||silenceRetries))pocketRetry(lineIndex,wrong,token);else if(silenceRetries>=SILENT_TRIES){running=false;partialSpeech='';render();feedback('I can’t hear you. Tap Speak when you’re ready to go on.',true);}else{const again=()=>{if(token===runId&&lineIndex===data.index&&running)listen(true);};retryTimer=setTimeout(()=>startWhenFree(()=>{if(token!==runId||lineIndex!==data.index||!running)return;if(wrong)cueAgain(again);else again();}),600);}}
  };rec.onend=finish;
- try{rec.start();render();}catch{recognition=null;running=false;document.body.classList.remove('listening');feedback('Safari needs a tap to continue. Tap Speak.',true);render();}
+ try{rec.start();render();}catch(err){slog('#'+sid+' start() threw '+(err&&err.message));recognition=null;running=false;document.body.classList.remove('listening');feedback('Safari needs a tap to continue. Tap Speak.',true);render();}
 }
 
-$('start').onclick=()=>{if(['directions','review'].includes(data.scenes[data.activeScene].kind)){selectScene(data.activeScene+1);return;}if(running){pause();return;}stopAudio();if(data.pocket)window.CuePocket?.unlock();if(data.index>=lines.length)data.index=0;running=true;feedback();render();window.scrollTo(0,0);askForMic(playCurrent);};
-$('listen').onclick=()=>listen(false);
+slog('page loaded'+((window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches)||navigator.standalone?' from the Home Screen':' in a browser tab')+': '+navigator.userAgent);document.addEventListener('visibilitychange',()=>slog('page '+document.visibilityState));window.addEventListener('pagehide',()=>slog('page hidden/closed'));
+$('copy-speech-log').onclick=async()=>{const text=speechLog.join('\n')||'(empty)';let ok=false;try{await navigator.clipboard.writeText(text);ok=true;}catch{}if(!ok){const area=$('speech-log-text');area.hidden=false;area.value=text;area.select();}$('speech-log-message').textContent=ok?'Copied. Paste it in your message to Claude.':'Select the text below and copy it.';};
+$('clear-speech-log').onclick=()=>{speechLog=[];try{localStorage.removeItem('cue-speech-log');}catch{}$('speech-log-text').hidden=true;$('speech-log-message').textContent='Log cleared.';};
+$('start').onclick=()=>{slog('Start tapped');if(['directions','review'].includes(data.scenes[data.activeScene].kind)){selectScene(data.activeScene+1);return;}if(running){pause();return;}stopAudio();if(data.pocket)window.CuePocket?.unlock();if(data.index>=lines.length)data.index=0;running=true;feedback();render();window.scrollTo(0,0);askForMic(playCurrent);unlockVoice();};
+$('listen').onclick=()=>{listen(false);unlockVoice();};
 $('hint').onclick=()=>{hint.open=!hint.open;render();};$('hint-words').onclick=()=>{hint.words+=3;hint.open=false;render();};
 $('hint-cue').onclick=()=>{const cue=lines[data.index-1];hint.open=false;if(!running||!cue)return;stopAudio();if(!speak(cue.text,()=>{if(running)playCurrent();}))render();};$('restart').onclick=()=>{pause();data.index=0;feedback();$('typed').value='';render();};
 $('hear-line').onclick=()=>{const text=['directions','review'].includes(data.scenes[data.activeScene].kind)?data.script.replace(/[\[\]]/g,''):lines[data.index]?.text;if(text){pause();speak(text);}};
 function toggleHide(){data.hide=!data.hide;render();}$('pocket-toggle').onclick=()=>{pause();data.pocket=!data.pocket;render();};
-// Pocket mode ignores taps (the phone is in a pocket); press and hold anywhere to pause.
+// Hands-free mode ignores taps (the phone is in a pocket); press and hold anywhere to pause.
 {const guard=$('pocket-guard');let hold=null;const cancel=()=>{clearTimeout(hold);guard.classList.remove('holding');};guard.onpointerdown=e=>{e.preventDefault?.();cancel();guard.classList.add('holding');hold=setTimeout(()=>{guard.classList.remove('holding');if(running)pause();},800);};guard.onpointerup=guard.onpointercancel=guard.onpointerleave=cancel;guard.oncontextmenu=e=>e.preventDefault?.();}$('reveal-line').onclick=toggleHide;$('hide-toggle').onclick=toggleHide;
 $('role').onchange=e=>{const selectedRole=e.target.value;if(!roles.includes(selectedRole))return;pause();data.role=selectedRole;data.index=0;feedback();render();};
 $('typed-form').onsubmit=e=>{e.preventDefault();if(!recognition&&!speaking&&!pendingAdvance)check([$('typed').value]);};
 $('pace').value=data.pace;$('pace').onchange=e=>{pause();data.pace=e.target.value;persist();};
 $('language').value=data.language;$('language').onchange=e=>{pause();data.language=e.target.value;data.languageManual=true;data.voice='';populateVoices();persist();};
 function populateVoices(){voices=window.speechSynthesis?.getVoices()||[];const available=voices.filter(v=>v.lang.startsWith(data.language.split('-')[0]));$('voice').replaceChildren();const def=document.createElement('option');def.value='';def.textContent='Device default';$('voice').append(def);for(const v of available){const o=document.createElement('option');o.value=v.voiceURI;o.textContent=`${v.name} (${v.lang})`;$('voice').append(o);}$('voice').value=data.voice;}
-$('auto-mic').checked=data.autoMic!==false;$('auto-mic').onchange=e=>{const enabled=e.target.checked;pause();data.autoMic=enabled;persist();};
+$('long-session').checked=data.longSession===true||(data.longSession!==false&&isIOS);$('long-session').onchange=e=>{pause();data.longSession=e.target.checked;persist();};$('auto-mic').checked=data.autoMic!==false;$('auto-mic').onchange=e=>{const enabled=e.target.checked;pause();data.autoMic=enabled;persist();};
 $('voice').onchange=e=>{data.voice=e.target.value;persist();};$('test-voice').onclick=()=>{pause();speak(lines.find(l=>l.speaker!==data.role)?.text||lines[0]?.text||data.script);};
 window.speechSynthesis?.addEventListener('voiceschanged',populateVoices);populateVoices();
 for(const el of document.querySelectorAll('[data-view]'))el.onclick=()=>showView(el.dataset.view);

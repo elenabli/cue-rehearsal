@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SpeechRecognition restart test</title>
+<style>
+  body{font:16px/1.4 -apple-system,system-ui,sans-serif;margin:16px;background:#fff;color:#111}
+  button{font:inherit;padding:10px 16px;margin:0 8px 8px 0}
+  select{font:inherit;padding:6px}
+  #log{white-space:pre-wrap;font:13px/1.4 ui-monospace,monospace;background:#f4f4f4;padding:10px;border-radius:8px;min-height:200px}
+</style>
+</head>
+<body>
+<h1>SpeechRecognition restart test</h1>
+<p>Each round: the page speaks a short cue with <code>speechSynthesis</code>, then starts a new <code>SpeechRecognition</code>. Say any short sentence after each cue. When a session ends, the next round starts automatically after 600 ms, with no tap.</p>
+<p><label>Language <select id="lang"><option value="en-US">English (US)</option><option value="ru-RU">Русский</option></select></label></p>
+<p><label><input type="checkbox" id="cue" checked> Speak a cue before each listening round</label></p>
+<p><label><input type="checkbox" id="reuse"> Reuse one SpeechRecognition object for all rounds (instead of a new one each round)</label></p>
+<fieldset><legend>Do what the Cue app does (to find which part breaks it)</legend>
+<p><label><input type="checkbox" id="wake"> Keep the screen awake (wake lock)</label></p>
+<p><label><input type="checkbox" id="alts"> Ask for 5 alternatives (maxAlternatives = 5)</label></p>
+<p><label><input type="checkbox" id="voice"> Use Cue's partner voice and speed</label></p>
+<p><label><input type="checkbox" id="first"> Listen first, before any cue (like a scene where you speak first)</label></p>
+</fieldset>
+<button id="start">Start 5 rounds</button><button id="stop">Stop</button><button id="copy">Copy log</button>
+<div id="log"></div>
+<script>
+const log = (m) => { const el = document.getElementById('log'); el.textContent += ((performance.now()/1000).toFixed(2)) + 's  ' + m + '\n'; };
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let round = 0, stopped = true, rec = null, shared = null;
+
+let wakeLock = null;
+function cueVoice() {
+  try { const d = JSON.parse(localStorage.getItem('cue-v1')) || {}; const lang = document.getElementById('lang').value; const all = speechSynthesis.getVoices(); return { voice: all.find(v => v.voiceURI === d.voice) || all.find(v => v.lang === lang) || all.find(v => v.lang.startsWith(lang.split('-')[0])), rate: Number(d.pace) || 1 }; } catch (e) { return {}; }
+}
+function cueThen(next, first) {
+  if (first || !document.getElementById('cue').checked) { next(); return; }
+  const u = new SpeechSynthesisUtterance(document.getElementById('lang').value === 'ru-RU' ? 'Ваша реплика.' : 'Your line.');
+  u.lang = document.getElementById('lang').value;
+  if (document.getElementById('voice').checked) { const c = cueVoice(); if (c.voice) u.voice = c.voice; if (c.rate) u.rate = c.rate; }
+  let started = false; u.onstart = () => { started = true; };
+  setTimeout(() => { if (!started && !stopped) log('  cue SILENT: no onstart after 2.5 s'); }, 2500);
+  u.onend = () => { log('  cue spoken'); next(); };
+  u.onerror = (e) => { log('  cue error ' + e.error); next(); };
+  speechSynthesis.speak(u);
+}
+
+function listen() {
+  if (stopped) return;
+  round++;
+  const n = round, started = performance.now();
+  let results = 0;
+  const reuse = document.getElementById('reuse').checked;
+  if (reuse) { if (!shared) shared = new SR(); rec = shared; } else { rec = new SR(); }
+  rec.lang = document.getElementById('lang').value;
+  rec.interimResults = true;
+  rec.continuous = false;
+  if (document.getElementById('alts').checked) rec.maxAlternatives = 5;
+  log('round ' + n + ': start() on ' + (reuse ? 'the same object' : 'a new object'));
+  rec.onstart = () => log('  onstart');
+  rec.onaudiostart = () => log('  onaudiostart');
+  rec.onsoundstart = () => log('  onsoundstart');
+  rec.onspeechstart = () => log('  onspeechstart');
+  rec.onresult = (e) => { results++; const r = e.results[e.results.length - 1]; log('  onresult ' + (r.isFinal ? 'final' : 'interim') + ': "' + r[0].transcript + '"'); };
+  rec.onnomatch = () => log('  onnomatch');
+  rec.onerror = (e) => log('  onerror ' + e.error + (e.message ? ' (' + e.message + ')' : ''));
+  rec.onend = () => {
+    log('  onend after ' + ((performance.now() - started)/1000).toFixed(1) + 's, results: ' + results + (results ? '' : '   <-- NOTHING RECOGNIZED'));
+    if (n >= 5) { stopped = true; if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; } log('done'); return; }
+    setTimeout(() => cueThen(listen), 600);
+  };
+  // Safety: stop a session that never ends by itself.
+  setTimeout(() => { if (rec && round === n) { log('  (12 s passed, calling stop())'); try { rec.stop(); } catch (e) {} } }, 12000);
+  try { rec.start(); } catch (e) { log('  start() threw: ' + e.message); }
+}
+
+document.getElementById('start').onclick = () => {
+  if (!SR) { log('SpeechRecognition is not available in this browser.'); return; }
+  document.getElementById('log').textContent = '';
+  log(navigator.userAgent + (navigator.standalone || matchMedia('(display-mode: standalone)').matches ? ' [Home Screen]' : ' [Safari tab]'));
+  const opts = ['reuse','cue','wake','alts','voice','first'].filter(id => document.getElementById(id).checked);
+  log('options: ' + (opts.join(', ') || 'none'));
+  if (document.getElementById('voice').checked) { const c = cueVoice(); log('voice: ' + (c.voice ? c.voice.name + ' (' + c.voice.lang + ')' : 'default') + ', speed ' + c.rate); }
+  if (document.getElementById('wake').checked && navigator.wakeLock) navigator.wakeLock.request('screen').then(l => { wakeLock = l; log('  wake lock on'); }).catch(e => log('  wake lock failed: ' + e.message));
+  round = 0; stopped = false; shared = null;
+  cueThen(listen, document.getElementById('first').checked);
+};
+document.getElementById('copy').onclick = () => { navigator.clipboard.writeText(document.getElementById('log').textContent).then(() => alert('Copied'), () => alert('Select the log text and copy it')); };
+document.getElementById('stop').onclick = () => { stopped = true; try { rec && rec.abort(); } catch (e) {} speechSynthesis.cancel(); log('stopped'); };
+</script>
+</body>
+</html>

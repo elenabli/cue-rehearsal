@@ -1,4 +1,4 @@
-// Pocket mode: rehearse with the phone in a pocket. Short tones (and haptics in the iPhone app)
+// Hands-free mode: rehearse with the phone in a pocket. Short tones (and haptics in the iPhone app)
 // say what happened, so the actor never has to look at the screen.
 // In the iPhone app the tones and haptics are played natively (see CuePocketNative in native.js),
 // because web audio in the app's web view could take over the audio session the microphone uses.
@@ -30,11 +30,9 @@
     pause:{ru:'Пауза.',uk:'Пауза.',en:'Paused.',fr:'Pause.',de:'Pause.',es:'Pausa.',it:'Pausa.',fi:'Tauko.'}
   };
   const phrase=(name,language)=>phrases[name]?.[String(language||'').split('-')[0]]||'';
-  // How a missed line goes on in pocket mode: 1st miss → hear the cue again, 2nd → hear your line, 3rd → hear it and move on.
+  // How a missed line goes on in hands-free mode: 1st miss → hear the cue again, 2nd → hear your line, 3rd → hear it and move on.
   function afterMiss(count){return count>=3?'move-on':count===2?'say-line':'cue';}
-  // How silence goes on: 1st → listen again, 2nd → hear the first words, 3rd → hear the line, 4th → pause.
-  function afterSilence(count){return count>=4?'pause':count===3?'say-line':count===2?'first-words':'listen';}
   // Turn proximity screen-off on or off (iPhone app only).
   function screen(on){try{root.CuePocketNative?.proximity(on);}catch{}}
-  root.CuePocket={play,unlock,phrase,afterMiss,afterSilence,screen,length,tones};
+  root.CuePocket={play,unlock,phrase,afterMiss,screen,length,tones};
 })(typeof window!=='undefined'?window:globalThis);
