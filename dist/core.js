@@ -55,5 +55,32 @@
     }
     return ops.reverse();
   }
-  const api={diffWords,flattenBrackets,pageNumberInfo,paginationTotals,cleanPaginationText,normalize,speakerKey,resolveSpeaker,isSpeakerName,parseScript,matches};root.CueCore=api;if(typeof module!=='undefined')module.exports=api;
+  // How far into a line the actor has got, for the live marker and for thinking pauses. Recognition mishears words in long lines,
+  // so the speech is aligned to the line with the same tolerance as matching, instead of stopping at the first word that differs.
+  // Returns heard: line words (split on spaces) reached so far; missed: indexes below heard that weren't said or were misheard;
+  // partial: what was said so far is a fair start of the line but doesn't reach its end yet (the actor may be thinking).
+  function progress(expected,actual){
+    const words=expected.split(/\s+/),line=[];words.forEach((w,owner)=>{for(const key of normalize(withoutParticles(w)).split(' ').filter(Boolean))line.push({key,owner});});
+    const said=normalize(withoutParticles(actual)).split(' ').filter(Boolean),n=line.length,m=said.length;
+    const none={heard:0,missed:[],partial:false};if(!n||!m)return none;
+    const extra=w=>PARTICLE_WORDS.has(w)?0:1,INF=1e9;
+    const d=Array.from({length:n+1},()=>new Array(m+1).fill(INF)),how=Array.from({length:n+1},()=>new Array(m+1).fill(''));
+    d[0][0]=0;for(let j=1;j<=m;j++){d[0][j]=d[0][j-1]+extra(said[j-1]);how[0][j]='x';}
+    for(let i=1;i<=n;i++){d[i][0]=i;how[i][0]='m';for(let j=1;j<=m;j++){
+      const a=line[i-1].key,options=[[d[i-1][j]+1,'m'],[d[i][j-1]+extra(said[j-1]),'x'],[d[i-1][j-1]+wordCost(a,said[j-1]),wordCost(a,said[j-1])<1?'s':'c']];
+      // A word heard split in two («перегар ищем»), or two words heard glued together.
+      if(j>=2&&closeWords(a,said[j-2]+said[j-1]))options.push([d[i-1][j-2],'g']);
+      if(i>=2&&closeWords(line[i-2].key+a,said[j-1]))options.push([d[i-2][j-1],'j']);
+      for(const [cost,step] of options)if(cost<d[i][j]){d[i][j]=cost;how[i][j]=step;}}}
+    const matchedEnd=step=>step==='s'||step==='g'||step==='j';
+    // The marker reaches the furthest line word that was actually said, as long as the way there has few slips.
+    let reach=0,at=0;for(let i=n;i>=1&&!reach;i--)for(let j=1;j<=m;j++)if(matchedEnd(how[i][j])&&d[i][j]<=Math.max(1,i/4)){reach=i;at=j;break;}
+    const said_=new Set();for(let i=reach,j=at;i>0||j>0;){const step=how[i][j];if(step==='s'){said_.add(i-1);i--;j--;}else if(step==='g'){said_.add(i-1);i--;j-=2;}else if(step==='j'){said_.add(i-1);said_.add(i-2);i-=2;j--;}else if(step==='c'){i--;j--;}else if(step==='m')i--;else j--;}
+    const heard=reach?line[reach-1].owner+1:0,missed=[];for(let k=0;k<heard;k++){const own=line.map((t,x)=>t.owner===k?x:-1).filter(x=>x>=0);if(own.length&&!own.some(x=>said_.has(x)))missed.push(k);}
+    // Everything said so far lines up with the start of the line (few slips), and the line goes on.
+    let best=0;for(let i=1;i<=n;i++)if(d[i][m]<=d[best][m])best=i;
+    const partial=best>0&&best<n&&d[best][m]<=Math.max(0.5,Math.floor(best/4));
+    return {heard,missed,partial};
+  }
+  const api={diffWords,progress,flattenBrackets,pageNumberInfo,paginationTotals,cleanPaginationText,normalize,speakerKey,resolveSpeaker,isSpeakerName,parseScript,matches};root.CueCore=api;if(typeof module!=='undefined')module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);
