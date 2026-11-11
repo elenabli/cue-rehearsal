@@ -4,8 +4,9 @@
    directions]. Nothing is uploaded. Headers, footers and footnotes live in
    other parts and are ignored, so page numbers never reach the script. */
 (function(root){
+  const t=text=>root.CueI18n?root.CueI18n.t(text):text;
   async function inflateRaw(bytes){
-    if(typeof DecompressionStream==='undefined')throw Error('This browser can’t open Word files. Update it, or save the play as PDF and import that.');
+    if(typeof DecompressionStream==='undefined')throw Error(t('This browser can’t open Word files. Update it, or save the play as PDF and import that.'));
     const stream=new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
     return new Uint8Array(await new Response(stream).arrayBuffer());
   }
@@ -13,7 +14,7 @@
   async function unzipEntry(bytes,wanted){
     const view=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength);let end=-1;
     for(let i=bytes.length-22;i>=Math.max(0,bytes.length-65557);i--)if(view.getUint32(i,true)===0x06054b50){end=i;break;}
-    if(end<0)throw Error('This file does not appear to be a Word document. Choose another file.');
+    if(end<0)throw Error(t('This file does not appear to be a Word document. Choose another file.'));
     const count=view.getUint16(end+10,true);let p=view.getUint32(end+16,true);const decoder=new TextDecoder();
     for(let n=0;n<count&&p+46<=bytes.length&&view.getUint32(p,true)===0x02014b50;n++){
       const method=view.getUint16(p+10,true),size=view.getUint32(p+20,true),nameLength=view.getUint16(p+28,true),extra=view.getUint16(p+30,true),comment=view.getUint16(p+32,true),local=view.getUint32(p+42,true);
@@ -21,7 +22,7 @@
       if(name!==wanted)continue;
       const start=local+30+view.getUint16(local+26,true)+view.getUint16(local+28,true),data=bytes.subarray(start,start+size);
       if(method===0)return data;if(method===8)return inflateRaw(data);
-      throw Error('This Word file uses an unsupported compression. Save it again in Word or Pages and retry.');
+      throw Error(t('This Word file uses an unsupported compression. Save it again in Word or Pages and retry.'));
     }
     return null;
   }
@@ -77,9 +78,9 @@
     return out.filter(Boolean).join('\n');
   }
   async function docxToText(bytes,headingOf=sceneHeading){
-    if(bytes[0]===0xd0&&bytes[1]===0xcf&&bytes[2]===0x11&&bytes[3]===0xe0)throw Error('This is an older Word .doc file. Open it in Word or Pages, save it as .docx or PDF, and import that.');
-    if(bytes[0]!==0x50||bytes[1]!==0x4b)throw Error('This file does not appear to be a Word document. Choose another file.');
-    const doc=await unzipEntry(bytes,'word/document.xml');if(!doc)throw Error('This file does not appear to be a Word document. Choose another file.');
+    if(bytes[0]===0xd0&&bytes[1]===0xcf&&bytes[2]===0x11&&bytes[3]===0xe0)throw Error(t('This is an older Word .doc file. Open it in Word or Pages, save it as .docx or PDF, and import that.'));
+    if(bytes[0]!==0x50||bytes[1]!==0x4b)throw Error(t('This file does not appear to be a Word document. Choose another file.'));
+    const doc=await unzipEntry(bytes,'word/document.xml');if(!doc)throw Error(t('This file does not appear to be a Word document. Choose another file.'));
     const styles=await unzipEntry(bytes,'word/styles.xml');const decoder=new TextDecoder();
     return documentXmlToText(decoder.decode(doc),styles?decoder.decode(styles):'',headingOf);
   }
