@@ -27,7 +27,8 @@ For access from an iPhone or another device, serve `dist/` from an HTTPS static 
 ## Rehearse a play
 
 1. Open Cue in Safari. To install it on iPhone, choose **Share → Add to Home Screen**.
-2. Open **Script** (**My script** on a computer) and upload the entire play as a text-based PDF, including the cast list. Files can be up to 25 MB. You can also import a UTF-8 `.txt` file or paste text.
+2. Open **Script** (**My script** on a computer) and upload the entire play as a text-based PDF or a Word `.docx` file, including the cast list. Files can be up to 25 MB. You can also import a UTF-8 `.txt` file or paste text. Older Word `.doc` files need to be saved as `.docx` or PDF first.
+   Scenes split at headings such as «Сцена 1». Plays that number scenes on their own line («( 4 A )», «12.») or head them with an all-caps place («ДОМ СЕМЬИ ЭЙСКОНЕН») get «Сцена …» headings added, which you can edit before saving. Foreign phrases with a Russian transcription («Tyst! [Тюст!]») are checked against the transcription.
 3. Extract the play, then review the dialogue and **Characters**. Put one character name on each line in that field.
 4. Save the play, choose a scene, and select your character under **I’m playing**.
 5. Start rehearsal and allow microphone access. Cue speaks the other characters’ lines and listens on your turns. A matching transcript advances the scene; incorrect or missing words keep you on the same line. Stretched words such as «ну-у» count as the plain word, and longer lines forgive a single misheard word.
