@@ -16,7 +16,8 @@ ctx.CueCore=ctx.window.CueCore;ctx.CuePdf=ctx.window.CuePdf;const tones=()=>ctx.
 vm.runInContext(fs.readFileSync('dist/app.js','utf8'),ctx);
 const run=code=>vm.runInContext(code,ctx);
 // Let short timers run and spoken lines finish until nothing is left to do but listen (long watchdogs stay pending).
-function settle(){for(let i=0;i<200;i++){const short=[...timers].find(([,t])=>t.ms<2000);if(short){timers.delete(short[0]);short[1].fn();continue;}if(pendingSpeech){const u=pendingSpeech;pendingSpeech=null;u.onend?.();continue;}return;}throw Error('did not settle');}
+let voiceAudible=false;
+function settle(){for(let i=0;i<200;i++){const short=[...timers].find(([,t])=>t.ms<2000);if(short){timers.delete(short[0]);short[1].fn();continue;}if(pendingSpeech){const u=pendingSpeech;pendingSpeech=null;if(voiceAudible)u.onstart?.();u.onend?.();continue;}return;}throw Error('did not settle');}
 function say(text){const r=[{transcript:text}];r.isFinal=true;const active=recognizer;active.onresult({results:[r]});if(!active.ended)active.stop();settle();}
 function silence(){const active=recognizer;active.onerror({error:'no-speech'});active.stop();settle();}
 const take=()=>events.splice(0);
@@ -63,6 +64,7 @@ say('Wrong words entirely');assert.ok(!take().some(e=>e.startsWith('tone:')),'No
 
 // iPhone (one listening session per scene). Lena's case: a pause while remembering must not throw away the start of the line.
 const LONG='Я гуляла по набережной до самого утра, а потом сидела на скамейке.';
+function runShort(){const short=[...timers].find(([,t])=>t.ms<2000);if(short){timers.delete(short[0]);short[1].fn();}}
 function fire(ms){const t=[...timers].find(([,x])=>x.ms===ms);assert.ok(t,'a '+ms+' ms timer is pending');timers.delete(t[0]);t[1].fn();settle();}
 const hasTimer=ms=>[...timers.values()].some(x=>x.ms===ms);
 let heardSoFar=[];function hear(text){run('turnStartedAt-=1000');heardSoFar=[...heardSoFar,text];const results=heardSoFar.map(t=>{const r=[{transcript:t}];r.isFinal=true;return r;});recognizer.onresult({results});settle();}
@@ -89,7 +91,18 @@ hear('я гуляла по набережной');assert.ok(hasTimer(15000));fir
 // iPhone, hands-free: a wrong line gets the low tone and the cue again; silence from the start brings growing hints, then a spoken pause.
 run('data.pocket=true');get('restart').onclick();get('feedback').children=[];get('start').onclick();settle();take();heardSoFar=[];
 hear('совсем другие слова здесь');assert.deepEqual(take().filter(e=>!e.startsWith('listen')),['tone:wrong/buzz','say:Ты где была всю ночь?']);assert.equal(run('data.index'),1);
-heardSoFar=[];fire(5000);fire(5000);fire(5000);fire(5000);fire(5000);
+heardSoFar=[];fire(5000);fire(5000);fire(5000);fire(5000);assert.equal(run('running'),true,'After the whole line was read, the app waits longer before pausing');fire(15000);
 assert.deepEqual(take().filter(e=>e.startsWith('say:')||e.startsWith('tone:')),['say:Я гуляла по','say:Я гуляла по набережной до самого','say:Я гуляла по набережной до самого утра, а потом','say:'+LONG,'tone:pause/error','say:Пауза.']);
 assert.equal(run('running'),false);
-console.log('Pocket mode passed: tones for right and wrong, missed lines read aloud, silence prompts, scene end, and hold to pause; on iPhone a pause keeps what was said and brings a spoken hint.');
+// Lena's log, 2026-11-11: once the partner's voice really plays, the open mic goes deaf. It is reopened 2.5 s into her turn,
+// and the old words that iOS flushes again when the session closes are not judged as the new line.
+run('data.pocket=false');get('restart').onclick();get('script-input').value='СЦЕНА 1\nСВЕТЛАНА: А ты чего так поздно встал?\nСЕРГЕЙ: Не спалось.\nСВЕТЛАНА: Садись, поешь.\nСЕРГЕЙ: Не хочу.';get('save-script').onclick();get('role').value='Светлана';get('role').onchange({target:get('role')});
+get('feedback').children=[];get('start').onclick();take();heardSoFar=[];const firstMic=recognizer;
+voiceAudible=true;hear('А ты чего так поздно встал');assert.ok(take().includes('say:Не спалось.'));assert.equal(run('data.index'),2);assert.equal(recognizer,firstMic,'Still the same session');
+assert.ok(hasTimer(2500),'After an audible voice, a quiet mic is checked after 2.5 s, not 10');
+const t=[...timers].find(([,x])=>x.ms===2500);timers.delete(t[0]);firstMic.stop=function(){ // iOS repeats the old words as it closes
+ const dup=['А ты чего так поздно встал','А ты чего так поздно встал'].map(x=>{const r=[{transcript:x}];r.isFinal=true;return r;});this.onresult({results:dup});this.ended=true;this.onend?.();};
+t[1].fn();settle();
+assert.notEqual(recognizer,firstMic,'The mic is reopened');assert.equal(run('data.index'),2);assert(!get('feedback').children.some(c=>c&&c.className==='count-it'),'The previous line is not judged as the current one');
+heardSoFar=[];hear('Садись поешь');settle();assert.equal(run('data.index')>=3,true,'The new session hears the line');
+console.log('Pocket mode passed: tones for right and wrong, missed lines read aloud, silence prompts, scene end, and hold to pause; on iPhone a pause keeps what was said and brings a spoken hint; a mic left deaf by the voice is reopened.');
