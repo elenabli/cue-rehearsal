@@ -46,8 +46,7 @@ assert.equal(run('data.index'),7);assert.equal(run('running'),false);
 
 // Silence from the start: listen again, then hints that grow to the whole line, then pause and say so.
 get('restart').onclick();run('data.index=4');get('start').onclick();settle();take();
-silence();assert.deepEqual(take(),['listen']);
-silence();assert.deepEqual(take(),['say:What if I','listen']);
+silence();assert.deepEqual(take(),['say:What if I','listen'],'The first quiet session already brings a hint');
 silence();assert.deepEqual(take(),['say:What if I told you I','listen']);
 silence();assert.deepEqual(take(),["say:What if I told you I wasn't going?",'listen']);
 silence();assert.deepEqual(take(),['tone:pause/error','say:Paused.']);

@@ -40,12 +40,12 @@ Turn on **Hands-free** before you start to rehearse with the phone in your pocke
 
 - a rising chime when the line is right;
 - a low tone when it's wrong. After the first miss you hear your cue again; after the second, Cue reads your line to you; after the third, it reads the line and moves on;
-- if you stop to remember, what you've said so far is kept. After 5 seconds of quiet Cue says the next few words, and you carry on from there. Each further quiet spell gives a longer hint, up to the whole line; after that Cue pauses and says so;
+- if you stop to remember, what you've said so far is kept. After a quiet spell (about 10 seconds) Cue says the next few words, and you carry on from there. Each further quiet spell gives a longer hint, up to the whole line; after that Cue pauses and says so;
 - a short fanfare and "Scene complete" at the end.
 
 Taps are ignored while hands-free runs, so the phone can't press buttons in your pocket. Press and hold the screen to pause. The screen stays on: if the phone locks, Safari stops listening, so leave it unlocked. Headphones such as AirPods work as microphone and speaker. On iPhone the sounds follow the silent switch, so turn silent mode off.
 
-Without hands-free, a pause partway through a line is also thinking time: Cue keeps what you said and waits, and only checks a half line after a long silence (15 seconds on iPhone).
+Without hands-free, a pause partway through a line is also thinking time: Cue keeps what you said and waits, and only checks a half line after a long silence.
 
 ## Script format
 

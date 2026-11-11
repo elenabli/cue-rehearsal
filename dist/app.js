@@ -115,11 +115,11 @@ function countItButton(){const b=document.createElement('button');b.className='c
 // Safari asks for the microphone the first time listening starts, after the partner's first cue. An earlier open-and-abort mic check at Start is gone: killing sessions is what broke listening on iPhone.
 function askForMic(then){then();}
 // One long listening session (iPhone). Opening and closing a session for every line makes Safari's mic go deaf and, with it, the partner's voice. Another rehearsal app that keeps its voice working on iPhone listens differently, so here the mic opens once per run and stays open: what's heard while the partner speaks is ignored, and a line is checked from what's heard on the actor's turn.
-const isIOS=/iP(hone|ad|od)/.test(navigator.userAgent||'')||(/Macintosh/.test(navigator.userAgent||'')&&navigator.maxTouchPoints>1);
 // iPhone plays speechSynthesis only after it has been started once from a tap. When the scene opens with the actor's own line, the first partner line used to be spoken later, outside any tap, and stayed silent. So a tap that doesn't speak anything itself plays a silent utterance to unlock the voice.
 let voiceUnlocked=false;
 function unlockVoice(){if(voiceUnlocked||speaking||!window.speechSynthesis)return;try{const u=new SpeechSynthesisUtterance('а');u.volume=0;u.rate=2;u.lang=data.language;u.onstart=()=>{voiceUnlocked=true;slog('voice: unlocked by tap');};u.onerror=e=>slog('voice: unlock error '+(e&&e.error));slog('voice: unlocking (silent utterance in the tap)');window.speechSynthesis.speak(u);}catch(err){slog('voice: unlock threw '+(err&&err.message));}}
-function longMode(){return !!Recognition&&autoMic()&&(data.longSession===true||(data.longSession!==false&&isIOS));}
+// Off by default everywhere: on Lena's iPhone (2026-11-11) a fresh session per line hears reliably once the voice is unlocked in the Start tap, while one open session goes deaf when the partner's voice plays.
+function longMode(){return !!Recognition&&autoMic()&&data.longSession===true;}
 let deafTimer=null,longRec=null,longText='',turnFrom=-1,turnStartedAt=0,quietTimer=null,longRestarts=0;
 // Thinking time in the one-session mode. What was said earlier in the turn is kept in turnCarry when the mic restarts or a hint is
 // spoken, so a pause never throws away the start of the line. A start that fits the line waits: in hands-free mode a spoken hint
@@ -176,7 +176,7 @@ function startWhenFree(go,waited=0){const last=lastSession;if(!last||last.ended|
 function pocketRetry(lineIndex,wrong,token){const l=lines[lineIndex],ok=()=>token===runId&&lineIndex===data.index&&running;const again=()=>{if(ok())listen(true);};const wait=go=>{retryTimer=setTimeout(()=>startWhenFree(()=>{if(ok())go();}),400);};
  if(wrong){partialSpeech='';pocketMiss(lineIndex,token,()=>wait(again));return;}
  // The first quiet session just listens again; after that each one brings a spoken hint, and what was said before is kept.
- if(!partialSpeech&&silenceRetries<2){wait(again);return;}const text=nextHint(l,partialSpeech);if(!text){pocketPause();return;}slog('hint: «'+text+'»');wait(()=>{if(!speak(text,again))again();});}
+ const text=nextHint(l,partialSpeech);if(!text){pocketPause();return;}slog('hint: «'+text+'»');wait(()=>{if(!speak(text,again))again();});}
 function listen(automatic=false,pinged=false){
  if(!Recognition){feedback('Voice input isn’t available here. Open the app in Safari, or type your line.',true);return;}
  if(longMode()&&running){const l=lines[data.index];if(l&&l.speaker===data.role&&!speaking&&!pendingAdvance){slog('tap: listen again (one session)');beginTurn();}return;}
@@ -241,7 +241,7 @@ $('typed-form').onsubmit=e=>{e.preventDefault();if(!recognition&&!speaking&&!pen
 $('pace').value=data.pace;$('pace').onchange=e=>{pause();data.pace=e.target.value;persist();};
 $('language').value=data.language;$('language').onchange=e=>{pause();data.language=e.target.value;data.languageManual=true;data.voice='';populateVoices();persist();};
 function populateVoices(){voices=window.speechSynthesis?.getVoices()||[];const available=voices.filter(v=>v.lang.startsWith(data.language.split('-')[0]));$('voice').replaceChildren();const def=document.createElement('option');def.value='';def.textContent='Device default';$('voice').append(def);for(const v of available){const o=document.createElement('option');o.value=v.voiceURI;o.textContent=`${v.name} (${v.lang})`;$('voice').append(o);}$('voice').value=data.voice;}
-$('hold-audio').checked=data.holdAudio!==false;$('hold-audio').onchange=e=>{pause();data.holdAudio=e.target.checked;persist();};$('long-session').checked=data.longSession===true||(data.longSession!==false&&isIOS);$('long-session').onchange=e=>{pause();data.longSession=e.target.checked;persist();};$('auto-mic').checked=data.autoMic!==false;$('auto-mic').onchange=e=>{const enabled=e.target.checked;pause();data.autoMic=enabled;persist();};
+$('hold-audio').checked=data.holdAudio!==false;$('hold-audio').onchange=e=>{pause();data.holdAudio=e.target.checked;persist();};$('long-session').checked=data.longSession===true;$('long-session').onchange=e=>{pause();data.longSession=e.target.checked;persist();};$('auto-mic').checked=data.autoMic!==false;$('auto-mic').onchange=e=>{const enabled=e.target.checked;pause();data.autoMic=enabled;persist();};
 $('voice').onchange=e=>{data.voice=e.target.value;persist();};$('test-voice').onclick=()=>{pause();speak(lines.find(l=>l.speaker!==data.role)?.text||lines[0]?.text||data.script);};
 window.speechSynthesis?.addEventListener('voiceschanged',populateVoices);populateVoices();
 for(const el of document.querySelectorAll('[data-view]'))el.onclick=()=>showView(el.dataset.view);
