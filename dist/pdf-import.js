@@ -60,6 +60,9 @@
     const m=s.match(/^(ACT|SCENE|PART|CHAPTER|PAGE|АКТ|СЦЕНА|ДЕЙСТВИЕ|КАРТИНА)(?=\s|[.:№]|$)(.*)$/iu);if(!m)return false;
     return m[1]===m[1].toLocaleUpperCase()||/^\s*[.:]?\s*(?:№\s*)?(?:\d+|[IVXLCDM]+)(?=$|[\s.:—–-])/u.test(m[2])||/^\s*(?:перв|втор|трет|четв[её]рт|пят|шест|one|two|three|four|five|first|second|third)\p{L}*\.?$/iu.test(m[2]);
   }
+  // One-word sentences that open a line of dialogue but are never names.
+  const NOT_NAMES=new Set('да нет ну ладно хорошо что как так вот все всё почему зачем конечно спасибо пожалуйста привет здравствуйте правда неправда никогда ничего тихо стой стоп yes no well oh ah what why how so okay ok sure right good fine nothing never please thanks hello nonsense quiet stop wait look listen come go indeed really perhaps certainly'.split(' '));
+  const ordinaryWord=(label,lower)=>label.split(/\s+/).some(w=>lower.has(w.toLocaleLowerCase())||NOT_NAMES.has(w.toLocaleLowerCase()));
   function standaloneName(s){return s.length<=45&&/\p{L}/u.test(s)&&s===s.toLocaleUpperCase()&&!/[\[\]():!?;“”"0-9]/u.test(s)&&s.split(/\s+/).length<=4&&!isHeading(s);}
   function extractCast(text){
     const preamble=splitPlayScenes(text).preamble||(!splitPlayScenes(text).scenes.length?text:'');
@@ -85,7 +88,7 @@
     // Labels not in capitals («Лопахин: …», “Ber: …”) count when the same name
     // opens at least three speeches and never appears as an ordinary word.
     const titled=new Map();for(const row of (splitPlayScenes(text).scenes.map(scene=>scene.script).join('\n')||text).split(/\r?\n/)){const m=row.trim().match(/^(\p{Lu}[\p{Ll}'’-]*(?:[ \t]+\p{Lu}[\p{Ll}'’-]*){0,2}):(?:\s|$)/u);if(m&&!isHeading(m[1])&&!names.some(name=>castResolve(m[1],[name])))titled.set(m[1],(titled.get(m[1])||0)+1);}
-    if([...titled.values()].some(n=>n>=3)){const lower=new Set(text.match(/(?<![\p{L}])\p{Ll}[\p{Ll}'’-]*/gu)||[]);for(const [label,n] of titled)if(n>=3&&!label.split(/\s+/).some(w=>lower.has(w.toLocaleLowerCase())))names.push(label);}
+    if([...titled.values()].some(n=>n>=3)){const lower=new Set(text.match(/(?<![\p{L}])\p{Ll}[\p{Ll}'’-]*/gu)||[]);for(const [label,n] of titled)if(n>=3&&!ordinaryWord(label,lower))names.push(label);}
     // In a long play a character may speak only once («ДЖЕЙСОН: Прости.»).
     const speeches=[...counts.values()].reduce((a,b)=>a+b,0)+names.length;
     for(const [label,count] of counts)if(count>=2||(speeches>=20&&/^[\p{Lu}\p{M}\d'’ -]+$/u.test(label)&&/\p{Lu}{2}/u.test(label)))names.push(label);
@@ -238,7 +241,7 @@
     rows=rows.map(row=>row.replace(/^(\s*(?:THE\s+)?)(MRS|MR|MS|DR|ST|MME|MLLE|MESSRS|PROF|REV|CAPT|COL|GEN|SGT|LT)\.(?=[ \t]+\p{Lu})/iu,'$1$2'));
     const counts=new Map();for(const row of rows){const m=row.trim().match(titleLabel);if(m&&!REMARK_START.test(m[1]))counts.set(m[1],(counts.get(m[1])||0)+1);}
     const lower=new Set((text.match(/(?<![\p{L}])\p{Ll}[\p{Ll}'’-]*/gu)||[]));
-    const labels=new Set([...counts].filter(([label,n])=>n>=3&&!label.split(/\s+/).some(w=>lower.has(w.toLocaleLowerCase()))).map(([label])=>label));
+    const labels=new Set([...counts].filter(([label,n])=>n>=3&&!ordinaryWord(label,lower)).map(([label])=>label));
     const titled=rows.filter(row=>{const m=row.trim().match(titleLabel);return m&&labels.has(m[1]);}).length;
     const capital=rows.filter(row=>/^[\p{Lu}][\p{Lu}\p{M}\d'’ -]{1,44}(?:\s*\([^)]*\))?\s*[:：.](?:\s|$)/u.test(row.trim())&&/\p{Lu}{2}/u.test(row)).length;
     if(titled>=10&&titled>capital)rows=rows.map(row=>{const m=row.trim().match(titleLabel);if(!m||!labels.has(m[1]))return row;return m[1]+':'+(m[2]?' ['+m[2].slice(1,-1)+']':'')+(m[3]?' '+m[3]:'');});
@@ -252,12 +255,14 @@
     text=stripBoilerplate(text);const english=isLatin(text);
     text=speakTranscriptions(markSceneHeadings(normalizeSpeakers(text),english));
     const {scenes}=splitPlayScenes(text);let cast=extractCast(text);
-    const converted=scenes.map(scene=>scene.title+'\n'+convertPlayText(scene.script,cast));
+    // A scene nobody speaks in is all stage directions.
+    const silent=body=>cast.length&&!body.split('\n').some(row=>{const m=row.match(/^([^:\[\]]{1,60}):/);return m&&castResolve(m[1].trim(),cast);})?body.split('\n').map(row=>row.trim()&&!/^\[.*\]$/.test(row.trim())?'['+row.trim().replace(/[\[\]]/g,'')+']':row).join('\n'):body;
+    const converted=scenes.map(scene=>scene.title+'\n'+silent(convertPlayText(scene.script,cast)));
     // A roster often lists people who never speak, or names a part differently
     // from its speech labels. Keep only the roles that have lines.
     if(cast.length&&scenes.length){const speaking=new Set();for(const scene of converted)for(const row of scene.split('\n')){const m=row.match(/^([^:\[\]]{1,60}):/);if(m)speaking.add(m[1].trim());}const kept=cast.filter(name=>speaking.has(name));if(kept.length)cast=kept;}
     const header=cast.length?(english?'CHARACTERS':'ДЕЙСТВУЮЩИЕ ЛИЦА')+'\n'+cast.join('\n')+'\n\n':'';
     return scenes.length?header+converted.join('\n\n'):convertPlayText(text);
   }
-  const api={speakTranscriptions,markSceneHeadings,extractCast,fontIsItalic,textItemsToLines,extractPageText,convertPlayText,splitPlayScenes,preparePlayText};root.CuePdf=api;if(typeof module!=='undefined')module.exports=api;
+  const api={headingKind,normalizeSpeakers,stripBoilerplate,speakTranscriptions,markSceneHeadings,extractCast,fontIsItalic,textItemsToLines,extractPageText,convertPlayText,splitPlayScenes,preparePlayText};root.CuePdf=api;if(typeof module!=='undefined')module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

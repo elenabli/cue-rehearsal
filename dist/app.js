@@ -261,7 +261,7 @@ $('voice').onchange=e=>{data.voice=e.target.value;persist();};$('test-voice').on
 window.speechSynthesis?.addEventListener('voiceschanged',populateVoices);populateVoices();
 for(const el of document.querySelectorAll('[data-view]'))el.onclick=()=>showView(el.dataset.view);
 for(const id of ['edit-script','full-script'])$(id).onclick=()=>showView('script');
-$('scene-edit').onclick=()=>{showView('script');const editor=$('script-input');let cursor=0,start=-1;for(let i=0;i<=data.activeScene;i++){start=editor.value.indexOf(data.scenes[i].title,cursor);if(start<0)break;cursor=start+data.scenes[i].title.length;}editor.focus?.();if(start>=0)editor.setSelectionRange?.(start,cursor);};
+$('scene-edit').onclick=()=>{showView('script');window.CueReviewUI?.showScene(data.activeScene);};
 $('save-script').onclick=()=>{try{
  const fullText=CueCore.cleanPaginationText($('script-input').value);if(!fullText.trim())throw Error(t('Add a script or upload a PDF before saving.'));const split=CuePdf.splitPlayScenes(fullText);
  const nextScenes=split.scenes.length?split.scenes:[{title:'Practice scene',script:fullText}];const cast=$('cast-input').value.split(/\r?\n/).map(name=>name.trim()).filter(Boolean);// A cast left over from another play names nobody here; detect it afresh.
@@ -283,7 +283,7 @@ $('save-script').onclick=()=>{try{
  pause();const before=data.scenes,activeBefore=before[data.activeScene],used=new Set();for(const scene of validated){const old=before.find(o=>!used.has(o)&&o.title===scene.title&&o.script===scene.script&&o.kind===scene.kind)||before.find(o=>!used.has(o)&&o.script===scene.script&&o.kind===scene.kind);if(old){used.add(old);scene.index=old.index||0;if(old===activeBefore)scene.wasActive=true;}}
  data.title=$('title-input').value.trim()||t('Untitled play');data.playText=fullText;data.cast=[...new Set(cast)];$('cast-input').value=data.cast.join('\n');inferLanguage(fullText);$('language').value=data.language;populateVoices();data.scenes=validated;roles=playRoles();if(!roles.length)roles=['ACTOR'];if(!roles.includes(data.role)){data.role=roles[0];for(const scene of data.scenes)scene.index=0;}
  data.activeScene=Math.max(0,data.scenes.findIndex(scene=>scene.wasActive));for(const scene of data.scenes)delete scene.wasActive;data.script=data.scenes[data.activeScene].script;lines=sceneLines(data.scenes[data.activeScene]);data.index=Math.max(0,Math.min(data.scenes[data.activeScene].index||0,lines.length));$('typed').value='';
- $('script-message').textContent='';feedback();render();showView('rehearse');const reviewCount=data.scenes.filter(scene=>scene.kind==='review').length;if(reviewCount)feedback(t('Play saved. {n} scenes need review; their text is kept and the other scenes are ready to rehearse.',{n:reviewCount}));
+ $('script-message').textContent='';window.CueReviewUI?.render();feedback();render();showView('rehearse');const reviewCount=data.scenes.filter(scene=>scene.kind==='review').length;if(reviewCount)feedback(t('Play saved. {n} scenes need review; their text is kept and the other scenes are ready to rehearse.',{n:reviewCount}));
  }catch(e){$('script-message').textContent=e.message;}};
 function selectScene(next){if(!Number.isInteger(next)||!data.scenes[next]||next===data.activeScene)return;pause();data.activeScene=next;data.script=data.scenes[next].script;lines=sceneLines(data.scenes[next]);data.index=Math.max(0,Math.min(data.scenes[next].index||0,lines.length));feedback();$('typed').value='';render();}
 $('scene-picker').onchange=e=>selectScene(Number(e.target.value));
