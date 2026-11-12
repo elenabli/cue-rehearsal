@@ -76,6 +76,20 @@ On Android, use Chrome: it has speech input (through Google's speech service), a
 
 Speech input uses the browser’s Web Speech service. It needs microphone permission and may require an internet connection. Audio may be processed by the browser vendor’s speech service, and recognition can mishear spoken lines. After an initial visit, the app is cached for offline reading; speech input may still need a connection.
 
+## Speech on iPhone: why it is unreliable
+
+Speech recognition in iPhone Safari is unreliable, and it sometimes goes silent. When that happens, Cue stops hearing you: the microphone indicator is on, but no words come back, so the scene can't move on. The partner voice has also gone quiet at times.
+
+**The cause is Safari itself.** We tested it with a minimal Safari test page (#14) that contains none of Cue's code, only Safari's own speech recognition. On 2026-11-03 it heard all five test rounds on Lena's iPhone. On 2026-11-04, the same page on the same phone heard nothing in any of the five rounds. Safari reported that listening had started and that audio was coming in, but it never returned any words. A known WebKit report ([WebAudio/web-speech-api#96](https://github.com/WebAudio/web-speech-api/issues/96)) describes the same kind of silent failure on iOS.
+
+**What we tried.** Before we found this, we tried several fixes in the app: restarting listening when it heard nothing, waiting for old sessions to end, and replaying the cue before a retry (#3, #7, #8). We later removed calls that could interfere with Safari (#18). None of this can make Safari's recognizer reliable, because the failure happens inside Safari itself. On a good day it works, and on a bad day it doesn't.
+
+**The native app.** A native iPhone app that used Apple's own speech framework worked on the phone (#9). We removed it (#11) to keep Cue a single web app, so this remains an option.
+
+**Unusual words.** Safari's recognizer also can't be told which words to expect, so rare words can be misheard even when it is listening. For example, «Господи, перегарищем-то разит!» once came back as «…рящий тормозит». The speech lab page (#12, #17) compares other speech-to-text services as possible replacements.
+
+If listening goes silent, you can still use **Type your line instead** to keep rehearsing.
+
 ## Development
 
 Every push to `main` runs the tests and publishes `dist/` to GitHub Pages (`.github/workflows/pages.yml`).
