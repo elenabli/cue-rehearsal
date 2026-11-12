@@ -1,7 +1,7 @@
 (function(root){
   // Stretched or stammered words («ну-у», «да-а-а», «н-нет», «нууу») are written for the actor; speech recognition hears the plain word.
   function unstretch(text){return text.replace(/(\p{L})(?:[-‐‑]\1+)+(?!\p{L})/gu,'$1').replace(/(?<!\p{L})(\p{L})[-‐‑](?=\1)/gu,'').replace(/(\p{L})\1{2,}/gu,'$1');}
-  function normalize(text){return unstretch(text.normalize('NFKC').toLocaleLowerCase().replace(/ё/g,'е').replace(/[’‘]/g,"'")).replace(/[^\p{L}\p{N}\s']/gu,' ').replace(/'/g,'').replace(/\s+/g,' ').trim();}
+  function normalize(text){return unstretch(text.normalize('NFKC').replace(/\u0301/g,'').toLocaleLowerCase().replace(/ё/g,'е').replace(/[’‘]/g,"'")).replace(/[^\p{L}\p{N}\s']/gu,' ').replace(/'/g,'').replace(/\s+/g,' ').trim();}
   function speakerKey(name){return name.normalize('NFKC').toLocaleLowerCase().replace(/ё/g,'е').replace(/[.\s]+/g,' ').trim();}
   function resolveSpeaker(label,cast=[]){
     const key=speakerKey(label);const exact=cast.find(name=>speakerKey(name)===key);if(exact)return exact;

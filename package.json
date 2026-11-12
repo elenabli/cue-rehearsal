@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "test": "node tests/rehearsal.cjs && node tests/retry.cjs && node tests/thinking.cjs && node tests/pocket.cjs && node tests/pdf-import.cjs && node tests/i18n.cjs && node tests/android.cjs",
+    "test": "node tests/rehearsal.cjs && node tests/retry.cjs && node tests/thinking.cjs && node tests/pocket.cjs && node tests/pdf-import.cjs && node tests/docx-import.cjs && node tests/i18n.cjs && node tests/android.cjs",
     "start": "python3 -m http.server 4173 --directory dist"
   }
 }

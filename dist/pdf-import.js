@@ -55,7 +55,7 @@
   // A keyword only marks a heading when typeset in capitals or followed by a
   // number, so wrapped dialogue such as «действие лекарства…» is kept.
   function isHeading(s){
-    if(/^(?:[IVXLCDM]+\.?|DRAMATIS PERSONAE|CHARACTERS|CAST(?: OF CHARACTERS)?|THE END|CURTAIN|FINIS)$/iu.test(s))return true;
+    if(/^(?:[IVXLCDM]+\.?|DRAMATIS PERSONAE|CHARACTERS|CAST(?: OF CHARACTERS)?|THE END|CURTAIN|FINIS|КОНЕЦ|ЗАНАВЕС)$/iu.test(s))return true;
     const m=s.match(/^(ACT|SCENE|PART|CHAPTER|PAGE|АКТ|СЦЕНА|ДЕЙСТВИЕ|КАРТИНА)(?=\s|[.:№]|$)(.*)$/iu);if(!m)return false;
     return m[1]===m[1].toLocaleUpperCase()||/^\s*[.:]?\s*(?:№\s*)?(?:\d+|[IVXLCDM]+)(?=$|[\s.:—–-])/u.test(m[2])||/^\s*(?:перв|втор|трет|четв[её]рт|пят|шест|one|two|three|four|five|first|second|third)\p{L}*\.?$/iu.test(m[2]);
   }
@@ -81,15 +81,19 @@
       if(!m||!/\p{Ll}/u.test(m[2])||!/\p{Lu}.*\p{Lu}/u.test(m[1]))continue;const label=m[1].trim();
       if(isHeading(label)||names.some(name=>castResolve(label,[name])))continue;counts.set(label,(counts.get(label)||0)+1);
     }
-    for(const [label,count] of counts)if(count>=2)names.push(label);
+    // In a long play a character may speak only once («ДЖЕЙСОН: Прости.»).
+    const speeches=[...counts.values()].reduce((a,b)=>a+b,0)+names.length;
+    for(const [label,count] of counts)if(count>=2||(speeches>=20&&/^[\p{Lu}\p{M}\d'’ -]+$/u.test(label)&&/\p{Lu}{2}/u.test(label)))names.push(label);
     return names;
   }
   function convertWithCast(text,cast){
     const out=[];let started=false;const leading=[];let directionDepth=0;
     for(const raw of text.replace(/\r/g,'').split('\n')){const row=raw.trim();if(!row||isHeading(row))continue;
       let label=null,rest='',aside='';if(!directionDepth){
-        const m=row.match(/^([^:\[\]]{1,60}?)(?:\s*\(([^)]*)\))?\s*(?:[:：.]\s*|[—–]\s*)(.*)$/u);
-        if(m){label=castResolve(m[1],cast);rest=m[3];aside=m[2]||'';}if(!label)label=castResolve(row.replace(/[:.]$/,''),cast);
+        const m=row.match(/^([^:\[\]]{1,60}?)(?:\s*\(([^)]*)\))?\s*([:：.]|[—–]|\s-(?=\s))\s*(.*)$/u);
+        // «Джейсон. Он кладет цветы…» is a direction; a speech written with a
+        // full stop has its name in capitals («ДЖЕЙСОН. Привет.»).
+        if(m&&!(m[3]==='.'&&m[1]!==m[1].toLocaleUpperCase())){label=castResolve(m[1],cast);rest=m[4];aside=m[2]||'';}if(!label)label=castResolve(row.replace(/[:.]$/,''),cast);
       }
       if(label){if(!started)out.push(...leading);out.push(label+': '+(aside?'['+aside+'] ':'')+rest.replace(/\(([^)]*)\)/g,'[$1]'));started=true;continue;}
       let clean='';for(const char of row){if(char==='('){directionDepth++;clean+='[';}else if(char===')'&&directionDepth){directionDepth--;clean+=']';}else clean+=char;}
@@ -125,9 +129,57 @@
     }
     return {preamble:preamble.join('\n').trim(),scenes:scenes.map(scene=>({...scene,script:scene.script.trim()}))};
   }
+  // Plays without «Сцена 1» headings often mark scenes another way: a
+  // number on its own line («( 4 A )», «12.») or an all-caps place name
+  // («ДОМ СЕМЬИ ЭЙСКОНЕН»). Rewrite those as «Сцена …» headings so the play
+  // still splits into scenes, and the actor can edit them before saving.
+  const capsLine=s=>{const head=s.replace(/\s*\([^()]*\)$/,'').replace(/[.\s]+$/,'');return head.length>=3&&head.length<=70&&/\p{L}.*\p{L}/u.test(head)&&head===head.toLocaleUpperCase()&&!/[:：!?"\[\]()]/u.test(head)&&!/^[\[(]/.test(s);};
+  function markSceneHeadings(text){
+    if(splitPlayScenes(text).scenes.length)return text;
+    const rows=text.replace(/\r/g,'').split('\n').map(row=>row.trim());
+    const speechRows=rows.filter(row=>/^[\p{Lu}][^:\[\]]{0,59}:\s*\S/u.test(row)).length;
+    const marker=row=>row.match(/^\(\s*(\d{1,3}(?:\s*[\p{L}](?![\p{L}]))?(?:\s*[—–-][^()]*)?)\s*\)$/u)?.[1]||row.match(/^(\d{1,3})\.$/)?.[1];
+    const markers=rows.filter(marker).length;const out=[];
+    if(markers>=2){
+      // Numbered scenes. A caps place line right after the number joins the
+      // title. When numbering restarts («1.» after «30»), the caps line just
+      // before it («ИНТЕРВЬЮ») names the new part.
+      let lastCaps='',previous=-1;for(let i=0;i<rows.length;i++){const row=rows[i],number=marker(row);
+        if(number){let title='Сцена '+number.replace(/\s+/g,' ');const value=parseInt(number,10);if(value<previous){if(lastCaps)title+=' · '+lastCaps;
+            // A new part usually opens with a title page (author, title). Keep
+            // those lines as directions so nobody has to say them.
+            for(let j=out.length-1,k=0;j>=0&&k<5&&!/^Сцена /.test(out[j])&&out[j].length<=60&&!/^[\[(]|:/.test(out[j]);j--,k++)if(out[j])out[j]='['+out[j]+']';}previous=value;lastCaps='';let next=i+1;while(next<rows.length&&!rows[next])next++;
+          if(next<rows.length&&capsLine(rows[next])){title+='. '+rows[next].replace(/[.\s]+$/,'');i=next;}out.push(title);continue;}
+        if(capsLine(row))lastCaps=row.replace(/[.\s]+$/,'');
+        out.push(row);
+      }
+      return out.join('\n');
+    }
+    if(speechRows<5)return text;
+    // Unnumbered caps headings. Names on their own line repeat; places
+    // usually don't, so a repeated caps line is never taken for a scene.
+    const cast=extractCast(text),seen=new Map();for(const row of rows)if(capsLine(row))seen.set(row,(seen.get(row)||0)+1);
+    const headings=rows.map((row,i)=>i>0&&seen.get(row)===1&&!isHeading(row.replace(/[.!\s]+$/,''))&&!castResolve(row.replace(/\s*\([^()]*\)$/,''),cast)&&!/^[\p{Lu}][^:]{0,59}:/u.test(row));
+    if(headings.filter(Boolean).length<2)return text;
+    let n=0;return rows.map((row,i)=>headings[i]?`Сцена ${++n}. ${row.replace(/[.\s]+$/,'')}`:row).join('\n');
+  }
+  // Foreign phrases often carry a Russian transcription: «Tyst! [Тюст!]».
+  // The actor says the transcription and a Russian recognizer writes it in
+  // Cyrillic, so that becomes the line and the original a direction:
+  // «Тюст! [Tyst!]». The first letters must correspond, so a direction after
+  // an English word («OK [кивает]») is left alone.
+  const translit={a:'а',b:'б',c:'кс',d:'д',e:'эе',f:'ф',g:'гйх',h:'х',i:'и',j:'йяюе',k:'кшч',l:'л',m:'м',n:'н',o:'о',p:'п',q:'к',r:'р',s:'сшз',t:'тч',u:'ую',v:'в',w:'в',x:'кз',y:'юий',z:'з',å:'о',ä:'эе',ö:'ёэе',é:'э',ü:'ю',æ:'э',ø:'ё'};
+  function speakTranscriptions(text){
+    return text.replace(/((?:\p{Script=Latin}[\p{Script=Latin}'’-]*[\s,.!?…:;]*)+)\[([^\[\]\p{Script=Latin}]*\p{Script=Cyrillic}[^\[\]\p{Script=Latin}]*)\]/gu,(all,latin,cyrillic)=>{
+      const words=t=>t.split(/[\s,.!?…:;]+/).filter(w=>/\p{L}/u.test(w)),a=words(latin),b=words(cyrillic);
+      if(Math.abs(a.length-b.length)>1||!(translit[a[0][0].toLowerCase()]||'').includes(b[0][0].toLocaleLowerCase()))return all;
+      return cyrillic.trim()+' ['+latin.trim()+']';
+    });
+  }
   function preparePlayText(text){
+    text=speakTranscriptions(markSceneHeadings(text));
     const {scenes}=splitPlayScenes(text),cast=extractCast(text);const header=cast.length?'ДЕЙСТВУЮЩИЕ ЛИЦА\n'+cast.join('\n')+'\n\n':'';
     return scenes.length?header+scenes.map(scene=>scene.title+'\n'+convertPlayText(scene.script,cast)).join('\n\n'):convertPlayText(text);
   }
-  const api={extractCast,fontIsItalic,textItemsToLines,extractPageText,convertPlayText,splitPlayScenes,preparePlayText};root.CuePdf=api;if(typeof module!=='undefined')module.exports=api;
+  const api={speakTranscriptions,markSceneHeadings,extractCast,fontIsItalic,textItemsToLines,extractPageText,convertPlayText,splitPlayScenes,preparePlayText};root.CuePdf=api;if(typeof module!=='undefined')module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);
