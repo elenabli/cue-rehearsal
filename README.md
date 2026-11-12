@@ -1,12 +1,12 @@
 # Cue
 
-An iPhone-friendly rehearsal app that reads your scene partners’ lines and checks yours aloud, advancing when you get them right.
+A phone-friendly rehearsal app (iPhone and Android) that reads your scene partners’ lines and checks yours aloud, advancing when you get them right.
 
 I built Cue quickly with AI coding tools, as an experiment in turning an idea into a working app.
 
 ## Try it online
 
-[Open Cue](https://elenabli.github.io/cue-rehearsal/) to try the app in your browser. No cloning or local setup is required. On iPhone, open it in Safari and choose **Share → Add to Home Screen** to install it.
+[Open Cue](https://elenabli.github.io/cue-rehearsal/) to try the app in your browser. No cloning or local setup is required. On iPhone, open it in Safari and choose **Share → Add to Home Screen** to install it. On Android, open it in Chrome and tap **Install** (or **⋮ → Install app**).
 
 You can start with the included demo scene or import your own play. Each visitor’s scripts and progress stay in their own browser.
 
@@ -26,7 +26,7 @@ For access from an iPhone or another device, serve `dist/` from an HTTPS static 
 
 ## Rehearse a play
 
-1. Open Cue in Safari. To install it on iPhone, choose **Share → Add to Home Screen**.
+1. Open Cue in Safari on iPhone or Chrome on Android. To install it, choose **Share → Add to Home Screen** on iPhone, or **⋮ → Install app** on Android.
 2. Open **Script** (**My script** on a computer) and upload the entire play as a text-based PDF or a Word `.docx` file, including the cast list. Files can be up to 25 MB. You can also import a UTF-8 `.txt` file or paste text. Older Word `.doc` files need to be saved as `.docx` or PDF first.
    Scenes split at headings such as «Сцена 1». Plays that number scenes on their own line («( 4 A )», «12.») or head them with an all-caps place («ДОМ СЕМЬИ ЭЙСКОНЕН») get «Сцена …» headings added, which you can edit before saving. Foreign phrases with a Russian transcription («Tyst! [Тюст!]») are checked against the transcription.
 3. Extract the play, then review the dialogue and **Characters**. Put one character name on each line in that field.
@@ -71,6 +71,8 @@ Scanned PDFs need text recognition (OCR) in a PDF app before import. Review extr
 ## Data and browser support
 
 PDF extraction happens on your device. Scripts, the selected character, and progress for each scene are saved in that browser. They do not sync between devices; clearing website data removes them. Use **Export whole play** to keep a copy of the script.
+
+On Android, use Chrome: it has speech input (through Google's speech service), and the app installs from Chrome with its own icon. Firefox on Android has no speech input, so lines can only be typed there. On Android the mic opens fresh for each of your lines; the iPhone-only settings (one open mic for the whole scene, sharing the audio session) are hidden.
 
 Speech input uses the browser’s Web Speech service. It needs microphone permission and may require an internet connection. Audio may be processed by the browser vendor’s speech service, and recognition can mishear spoken lines. After an initial visit, the app is cached for offline reading; speech input may still need a connection.
 
