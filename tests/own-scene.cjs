@@ -16,7 +16,7 @@ assert.equal(run('data.role'),'Анна');assert.equal(run('data.activeScene'),0
 const pick=name=>{get('role').value=name;get('role').onchange({target:get('role')});};
 pick('Вера');assert.equal(run('data.activeScene'),1,'Вера is silent in scene 1, so her first scene opens');
 pick('Анна');assert.equal(run('data.activeScene'),0,'Анна is silent in scene 2, so her first scene opens');
-get('scene-picker').onchange({target:{value:'2'}});pick('Борис');assert.equal(run('data.activeScene'),0,'Борис is silent in scene 3');
-run('data.index=1');pick('Борис');get('scene-picker').onchange({target:{value:'0'}});run('data.index=1');pick('Вера');
+run('selectScene(2)');pick('Борис');assert.equal(run('data.activeScene'),0,'Борис is silent in scene 3');
+run('data.index=1');pick('Борис');run('selectScene(0)');run('data.index=1');pick('Вера');
 assert.equal(run('data.activeScene'),1);
 console.log('Own-scene checks passed: a role opens on its first scene with lines.');

@@ -8,6 +8,8 @@
  const ru=(n,one,few,many)=>{const a=Math.abs(n)%100,b=a%10;return a>10&&a<20?many:b===1?one:b>=2&&b<=4?few:many;};
  const en=(n,one,many)=>n===1?one:many;
  const EN={
+  '{n} lines':v=>`${v.n} ${en(v.n,'line','lines')}`,
+  'You said all {n} of your lines.':v=>v.n===1?'You said your line.':`You said all ${v.n} of your lines.`,
   '{n} lines in this scene':v=>`${v.n} ${en(v.n,'line','lines')} in this scene`,
   '{n} scenes in your play · Progress is saved for each scene':v=>`${v.n} ${en(v.n,'scene','scenes')} in your play · Progress is saved for each scene`,
   'Play saved. {n} scenes need review; their text is kept and the other scenes are ready to rehearse.':v=>`Play saved. ${v.n} ${en(v.n,'scene needs','scenes need')} review; their text is kept and the other scenes are ready to rehearse.`,
@@ -15,6 +17,31 @@
   'Extracted {n} pages.':v=>`Extracted ${v.n} ${en(v.n,'page','pages')}.`,
  };
  const RU={
+  'SCENE DONE':'СЦЕНА ПРОЙДЕНА',
+  'You know this scene.':'Вы знаете эту сцену.',
+  'Start again':'Начать заново',
+  'needs review':'нужна проверка',
+  'stage directions':'ремарки',
+  'started':'начата',
+  'END OF YOUR PART':'КОНЕЦ ВАШЕЙ РОЛИ',
+  'END OF SCENE':'КОНЕЦ СЦЕНЫ',
+  'From the top':'Сначала',
+  '▶ Resume next scene':'▶ Продолжить следующую сцену',
+  '▶ Rehearse first scene':'▶ Репетировать первую сцену',
+  '▶ Rehearse next scene':'▶ Репетировать следующую сцену',
+  '↺ Again':'↺ Ещё раз',
+  'Done':'Готово',
+  'PLAY':'ПЬЕСА',
+  'Scenes':'Сцены',
+  'Your lines show as blanks':'Ваши реплики показаны пропусками',
+  'Type my lines instead of speaking':'Печатать реплики вместо того, чтобы говорить',
+  'Shows a box for typing your line on your turn, for when the mic can’t hear you.':'Показывает поле для ввода реплики, когда микрофон вас не слышит.',
+  'Type your line':'Введите реплику',
+  'Check':'Проверить',
+  'Start from the first line':'Начать с первой реплики',
+  '{n} lines':v=>`${v.n} ${ru(v.n,'реплика','реплики','реплик')}`,
+  'Scenes without you ({n})':v=>`Сцены без вас (${v.n})`,
+  'You said all {n} of your lines.':v=>`Вы сказали все реплики: ${v.n}.`,
   // Page title and navigation
   'Cue — Your rehearsal partner':'Cue — ваш партнёр по репетициям',
   'Cue home':'Cue — на главную',
