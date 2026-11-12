@@ -108,3 +108,8 @@ body.rehearsing.pocket .stage-card .transport,body.rehearsing.pocket .feedback .
 .review-dialog>.button{width:100%;margin-top:16px}
 .review-block{display:block;width:100%;text-align:left;background:transparent;border:0;border-bottom:1px solid var(--line);padding:11px 2px;font:15px/1.55 'PT Mono',ui-monospace,monospace;color:var(--ink);white-space:pre-wrap;overflow-wrap:anywhere}
 .review-block b{display:block;font-size:12px;letter-spacing:.5px;margin-bottom:2px}.review-block.review-remark{color:var(--muted);font-style:italic}
+
+/* Partner's pace on the phone; long partner speeches in smaller type; troubleshooting folded away at the bottom of Settings. */
+@media(max-width:650px){.role-card>.setting-row.mobile-row select{min-height:44px;font-size:16px;padding:8px 10px}}
+.stage-line.long-partner,body.rehearsing .stage-line.long-partner{font-size:19px;line-height:1.55}
+.trouble{border-top:1px solid var(--line);margin-top:26px;padding-top:6px}.trouble>summary{cursor:pointer;font-weight:600;font-size:15px;padding:14px 0;list-style:none;display:flex;justify-content:space-between;align-items:center}.trouble>summary::-webkit-details-marker{display:none}.trouble>summary::after{content:'+';font-size:20px;color:var(--muted)}.trouble[open]>summary::after{content:'−'}

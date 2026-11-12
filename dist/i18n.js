@@ -310,6 +310,7 @@
   'Open the app in Safari. Tap Share, then Add to Home Screen. Allow microphone access when prompted. If voice input is unavailable from the Home Screen, open the app in Safari. The screen stays on while a rehearsal is running. The script can be read offline after your first visit; speech recognition may need a connection.':'Откройте приложение в Safari. Нажмите «Поделиться», затем «На экран „Домой“». Разрешите доступ к микрофону, когда появится запрос. Если с экрана «Домой» голосовой ввод не работает, откройте приложение в Safari. Пока идёт репетиция, экран не гаснет. После первого открытия пьесу можно читать без сети; для распознавания речи может понадобиться интернет.',
   'How to add to Home Screen ↗':'Как добавить на экран «Домой» ↗',
   'Speech log':'Журнал речи',
+  'If listening fails':'Если микрофон не слышит',
   'If listening or the partner voice stops, copy this log and send it to whoever helps you with Cue. It lists what the mic and voice did, with the words heard.':'Если прослушивание или голос партнёра остановились, скопируйте журнал и отправьте тому, кто помогает вам с Cue. В нём записано, что делали микрофон и голос, и какие слова были услышаны.',
   'Copy speech log':'Скопировать журнал',
   'Clear log':'Очистить журнал',
