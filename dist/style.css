@@ -91,6 +91,23 @@ body.rehearsing.pocket .pocket-guard.holding span{color:var(--ink);background:li
 @keyframes pocket-hold{from{background-size:0 3px}to{background-size:100% 3px}}
 body.rehearsing.pocket .stage-card .transport,body.rehearsing.pocket .feedback .count-it{display:none!important}
 @media(max-width:650px){.role-card>.setting-row.mobile-row{display:flex}}
+/* Check the play: roles and scenes found by the importer, fixed by tapping. */
+.review-panel{margin:0 0 26px}.review-panel h2{font:600 22px 'Golos Text',sans-serif;margin:0 0 6px}.review-panel h3{font:600 15px 'Golos Text',sans-serif;margin:20px 0 8px}.review-panel .muted{margin:0}
+.review-list{border:1px solid var(--line);border-radius:8px;background:#fff;overflow:hidden}
+.review-row{display:flex;width:100%;align-items:baseline;justify-content:space-between;gap:14px;padding:13px 14px;background:transparent;border:0;border-bottom:1px solid var(--line);text-align:left;font:inherit;font-size:15px;color:var(--ink);min-height:46px}
+.review-row:last-child{border-bottom:0}.review-row b{font-weight:550;overflow-wrap:anywhere}.review-row span{color:var(--muted);font-size:13px;white-space:nowrap}
+.review-row.review-warn span{color:var(--ink);background:var(--lime);padding:1px 6px;border-radius:3px}
+#review-roles-more{font-size:13px;padding:10px 0}
+.review-text{margin:0 0 24px}.review-text summary{cursor:pointer;font-size:14px;color:#7a7a78;padding:8px 0}.review-text[open] summary{margin-bottom:14px}
+.review-text label{display:block;font-weight:600;margin:0 0 10px}.review-text textarea{margin-bottom:22px}
+.review-dialog{padding:26px 20px 22px;max-height:calc(100dvh - 30px);overflow:auto}.review-dialog.review-wide{max-width:640px}
+.review-dialog label{display:block;font-size:13px;letter-spacing:0;font-weight:600;color:var(--ink);margin:14px 0 6px}.review-dialog label:first-of-type{margin-top:6px}
+.review-dialog input,.review-dialog select,.review-dialog textarea{width:100%;font-size:16px;margin:0}.review-dialog textarea{font:16px/1.6 inherit;resize:vertical}
+.review-dialog h2{margin:0 0 4px;font-size:22px;letter-spacing:0}.review-dialog #block-new{margin-top:8px}
+.review-actions{display:flex;flex-wrap:wrap;gap:10px 18px;margin:16px 0 6px}.review-actions .button{flex:1;margin:0}.review-dialog .text-button{font-size:13px;text-decoration:underline;text-underline-offset:3px}
+.review-dialog>.button{width:100%;margin-top:16px}
+.review-block{display:block;width:100%;text-align:left;background:transparent;border:0;border-bottom:1px solid var(--line);padding:11px 2px;font:15px/1.55 'PT Mono',ui-monospace,monospace;color:var(--ink);white-space:pre-wrap;overflow-wrap:anywhere}
+.review-block b{display:block;font-size:12px;letter-spacing:.5px;margin-bottom:2px}.review-block.review-remark{color:var(--muted);font-style:italic}
 
 /* Partner's pace on the phone; long partner speeches in smaller type; troubleshooting folded away at the bottom of Settings. */
 @media(max-width:650px){.role-card>.setting-row.mobile-row select{min-height:44px;font-size:16px;padding:8px 10px}}

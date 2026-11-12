@@ -7,8 +7,9 @@
  // Put the converted play in the editor for review before saving.
  function showDraft(text,name){
   const converted=CuePdf.preparePlayText(text);byId('script-input').value=converted;byId('cast-input').value=CuePdf.extractCast(converted).join('\n');byId('title-input').value=name;byId('script-message').textContent='';
-  const sceneCount=CuePdf.splitPlayScenes(converted).scenes.length;
-  byId('pdf-review').hidden=false;byId('pdf-review').textContent=sceneCount?t('Found {n} scenes. Italic text and text in (parentheses) are kept as stage directions in [brackets]. Review the scene headings, character names, and dialogue below, then choose Save play & rehearse. Each scene will be available in the scene picker.',{n:sceneCount}):t('No scene headings were found. You can add headings such as «Сцена 1» above each scene, or save this as a single scene. Review the character names and dialogue before saving.');
+  const sceneCount=CuePdf.splitPlayScenes(converted).scenes.length,roleCount=CuePdf.extractCast(converted).length;
+  byId('pdf-review').hidden=false;byId('pdf-review').textContent=sceneCount?t('Found {s} scenes and {r} roles. Check them below, then choose Save play & rehearse.',{s:sceneCount,r:roleCount}):t('No scene headings were found. Check the roles and lines below. To divide the play, tap the line where a scene begins.');
+  window.CueReviewUI?.render();
  }
  const isDocx=file=>/\.docx$/i.test(file.name)||file.type==='application/vnd.openxmlformats-officedocument.wordprocessingml.document';
  async function openDocx(file){
@@ -22,7 +23,12 @@
    await dispose();if(file.size>25*1024*1024)throw Error(t('Choose a file smaller than 25 MB. Export a scene or compress your file first.'));
    if(/\.doc$/i.test(file.name)||file.type==='application/msword')throw Error(t('This is an older Word .doc file. Open it in Word or Pages, save it as .docx or PDF, and import that.'));
    if(isDocx(file)){await openDocx(file);return;}
-   if(file.type!=='application/pdf'&&!/\.pdf$/i.test(file.name))throw Error(t('Please choose a PDF or Word (.docx) file.'));
+   // OpenDocument, Rich Text and plain text are read whole, like Word files.
+   const kind=/\.odt$/i.test(file.name)?'odt':/\.rtf$/i.test(file.name)||/rtf/.test(file.type)?'rtf':/\.(?:txt|text|md|fountain)$/i.test(file.name)||file.type.startsWith('text/')?'txt':'';
+   if(kind){status(t('Reading your file…'));const bytes=new Uint8Array(await file.arrayBuffer());const text=kind==='odt'?await CueText.odtToText(bytes):kind==='rtf'?CueText.rtfToText(bytes):CueText.decodeText(bytes);
+    if(!text.trim())throw Error(t('No text was found in this file. Choose another file.'));showDraft(text,file.name.replace(/\.[^.]+$/,''));status(t('Read the whole file. Check the play below before saving.'));return;}
+   if(/\.pages$/i.test(file.name))throw Error(t('This is a Pages file. In Pages, choose Export To → Word or PDF, and import that.'));
+   if(file.type!=='application/pdf'&&!/\.pdf$/i.test(file.name))throw Error(t('Please choose a PDF, Word (.docx), OpenDocument (.odt), Rich Text (.rtf) or text (.txt) file.'));
    status(t('Opening your PDF…'));const lib=await import('./vendor/pdfjs/pdf.mjs');lib.GlobalWorkerOptions.workerSrc=new URL('./vendor/pdfjs/pdf.worker.mjs',document.baseURI).href;
    const bytes=new Uint8Array(await file.arrayBuffer());if(!new TextDecoder().decode(bytes.slice(0,1024)).includes('%PDF-'))throw Error(t('This file does not appear to be a PDF. Choose another file.'));
    loading=lib.getDocument({data:bytes,cMapUrl:new URL('./vendor/pdfjs/cmaps/',document.baseURI).href,cMapPacked:true,standardFontDataUrl:new URL('./vendor/pdfjs/standard_fonts/',document.baseURI).href,wasmUrl:new URL('./vendor/pdfjs/wasm/',document.baseURI).href,fontExtraProperties:true,isEvalSupported:false});

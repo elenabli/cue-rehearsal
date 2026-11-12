@@ -14,7 +14,7 @@ assert.equal(I.t('{n} scenes in your play · Progress is saved for each scene',{
 assert.equal(I.t('Something new'),'Something new','untranslated text falls back to English');
 // Every text the code passes to t() has a Russian translation.
 const RU=I.dictionary.ru,norm=s=>s.replace(/\s+/g,' ').trim();const missing=[];
-for(const file of ['dist/app.js','dist/pdf-reader.js']){const src=fs.readFileSync(file,'utf8');for(const call of src.matchAll(/\bt\(([^()]*)\)/g))for(const m of call[1].matchAll(/'((?:[^'\\]|\\.)*)'/g)){const text=m[1].replace(/\\n/g,'\n');if(!(text in RU))missing.push(file+': '+text);}}
+for(const file of ['dist/app.js','dist/pdf-reader.js','dist/review.js','dist/text-import.js','dist/docx-import.js']){const src=fs.readFileSync(file,'utf8');for(const call of src.matchAll(/\bt\(([^()]*)\)/g))for(const m of call[1].matchAll(/'((?:[^'\\]|\\.)*)'/g)){const text=m[1].replace(/\\n/g,'\n');if(!(text in RU))missing.push(file+': '+text);}}
 assert.deepEqual(missing,[],'every t() text has a Russian translation');
 // Static page text: report what has no translation (new text from other changes stays English until added).
 const html=fs.readFileSync('dist/index.html','utf8').replace(/<script[\s\S]*?<\/script>|<textarea[\s\S]*?<\/textarea>|<select id="(?:language|ui-language)"[\s\S]*?<\/select>/g,'');
