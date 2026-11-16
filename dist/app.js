@@ -8,8 +8,8 @@ JAMES: Then let's not waste it on things we cannot change.
 ELENA: What if I told you I wasn't going?
 JAMES: I'd ask you to say it again.
 ELENA: I'm staying. This time, I'm staying.`};
-let data={...demo,role:'ELENA',index:0,hide:false,pace:'1',language:'en-GB',voice:'',autoMic:true,pocket:false};let storageFailed=false;
-try{const saved=JSON.parse(localStorage.getItem('cue-v1'));if(saved&&typeof saved.script==='string')Object.assign(data,saved);}catch{storageFailed=true;}
+let data={...demo,welcomed:false,role:'ELENA',index:0,hide:false,pace:'1',language:'en-GB',voice:'',autoMic:true,pocket:false};let storageFailed=false;
+try{const saved=JSON.parse(localStorage.getItem('cue-v1'));if(saved&&typeof saved.script==='string'){if(!('welcomed'in saved))saved.welcomed=true;Object.assign(data,saved);}}catch{storageFailed=true;}
 // Migrate the original single-scene save without losing its current line.
 if(!Array.isArray(data.scenes)||!data.scenes.length||data.scenes.some(scene=>typeof scene.script!=='string')){
  data.scenes=[{title:'Practice scene',script:data.script,index:data.index||0}];data.activeScene=0;
@@ -73,7 +73,7 @@ function slog(message){const d=new Date();const stamp=d.toTimeString().slice(0,8
 function feedback(message='',error=false){if(message)slog((error?'SCREEN (error): ':'screen: ')+message.split('\n')[0]);mismatchShown=false;$('feedback').textContent=message;$('feedback').classList.toggle('error',error);}
 function stopAudio(){slog('stop audio');closeLong();spokenHint={key:'',upTo:0};runId++;clearTimeout(advanceTimer);clearTimeout(retryTimer);pendingAdvance=false;partialSpeech='';silenceRetries=0;deafRetries=0;captureRetries=0;if(recognition){const old=recognition;recognition=null;old.onresult=old.onerror=null;old.onend=()=>{if(lastSession&&lastSession.rec===old)lastSession.ended=true;};try{old.stop();}catch{}}quietVoice();activeUtterance=null;speaking=false;document.body.classList.remove('listening');}
 function pause(){if(running)slog('pause');running=false;stopAudio();render();}
-let currentView='rehearse';function showView(name){pause();document.querySelectorAll('.view').forEach(el=>el.hidden=el.id!==name);document.querySelectorAll('.nav').forEach(el=>el.classList.toggle('active',el.dataset.view===name));currentView=name;$('crumb').textContent=t({rehearse:'Rehearse',script:'My script',settings:'Settings'}[name]);window.scrollTo({top:0,behavior:'smooth'});}
+let currentView='rehearse';function showView(name){pause();document.querySelectorAll('.view').forEach(el=>el.hidden=el.id!==name);document.querySelectorAll('.nav').forEach(el=>el.classList.toggle('active',el.dataset.view===name));currentView=name;$('crumb').textContent=t({rehearse:'Rehearse',script:'Script',settings:'Settings'}[name]);window.scrollTo({top:0,behavior:'smooth'});}
 function render(){const scene=data.scenes[data.activeScene],needsReview=scene.kind==='review',directionsOnly=['directions','review'].includes(scene.kind),line=lines[data.index],mine=line?.speaker===data.role,complete=!line&&!directionsOnly;
  $('play-title').textContent=data.title;renderScenes();$('line-count').textContent=needsReview?t('REVIEW NEEDED'):directionsOnly?t('STAGE DIRECTIONS'):complete?t('SCENE COMPLETE'):`${data.index+1} / ${lines.length}`;
  $('speaker').textContent=needsReview?t('TEXT KEPT · NEEDS REVIEW'):directionsOnly?t('STAGE DIRECTIONS ONLY'):complete?t('SCENE DONE'):`${line.speaker}${mine?t(' · YOU'):''}`;
@@ -266,11 +266,11 @@ $('language').value=data.language;$('language').onchange=e=>{pause();data.langua
 function populateVoices(){voices=window.speechSynthesis?.getVoices()||[];const available=voices.filter(v=>voiceLang(v).startsWith(data.language.split('-')[0]));$('voice').replaceChildren();const def=document.createElement('option');def.value='';def.textContent=t('Device default');$('voice').append(def);for(const v of available){const o=document.createElement('option');o.value=v.voiceURI;o.textContent=`${v.name} (${v.lang})`;$('voice').append(o);}$('voice').value=data.voice;}
 $('hold-audio').checked=data.holdAudio!==false;$('hold-audio').onchange=e=>{pause();data.holdAudio=e.target.checked;persist();};$('long-session').checked=data.longSession===true;$('long-session').onchange=e=>{pause();data.longSession=e.target.checked;persist();};$('auto-mic').checked=data.autoMic!==false;$('auto-mic').onchange=e=>{const enabled=e.target.checked;pause();data.autoMic=enabled;persist();};
 // Interface language: English or Russian. The play's language above is separate.
-if($('ui-language')){$('ui-language').value=window.CueI18n?.lang||'en';$('ui-language').onchange=e=>{pause();window.CueI18n?.setLang(e.target.value);feedback();$('crumb').textContent=t({rehearse:'Rehearse',script:'My script',settings:'Settings'}[currentView]);populateVoices();render();};}
+if($('ui-language')){$('ui-language').value=window.CueI18n?.lang||'en';$('ui-language').onchange=e=>{pause();window.CueI18n?.setLang(e.target.value);feedback();$('crumb').textContent=t({rehearse:'Rehearse',script:'Script',settings:'Settings'}[currentView]);populateVoices();render();};}
 $('voice').onchange=e=>{data.voice=e.target.value;persist();};$('test-voice').onclick=()=>{pause();speak(lines.find(l=>l.speaker!==data.role)?.text||lines[0]?.text||data.script);};
 window.speechSynthesis?.addEventListener('voiceschanged',populateVoices);populateVoices();
 for(const el of document.querySelectorAll('[data-view]'))el.onclick=()=>showView(el.dataset.view);
-$('save-script').onclick=()=>{try{
+$('save-script').onclick=()=>{try{data.welcomed=true;$('welcome').hidden=true;
  const fullText=CueCore.cleanPaginationText($('script-input').value);if(!fullText.trim())throw Error(t('Add a script or upload a PDF before saving.'));const split=CuePdf.splitPlayScenes(fullText);
  const nextScenes=split.scenes.length?split.scenes:[{title:'Practice scene',script:fullText}];const cast=$('cast-input').value.split(/\r?\n/).map(name=>name.trim()).filter(Boolean);// A cast left over from another play names nobody here; detect it afresh.
  const labels=fullText.split(/\r?\n/).map(row=>row.trim().match(/^([^:\[\]]{1,60}?)\s*(?:\([^)]*\)\s*)?(?:[:：.—–]|$)/u)?.[1]).filter(Boolean);
@@ -337,4 +337,9 @@ $('reader-back').onclick=()=>{reading=false;readPick=-1;render();};
 $('back-line').onclick=()=>{if(!running||data.index<1)return;stopAudio();trouble.delete(data.index);data.index--;feedback();playCurrent();};
 $('end-hard').onclick=()=>startDrill();
 if(storageFailed)$('storage-notice').textContent=t('Browser storage is unavailable. Export your script to keep a copy.');
+// First visit: one card on Home, add your own play or try the demo scene.
+function closeWelcome(){data.welcomed=true;$('welcome').hidden=true;persist();}
+$('welcome').hidden=!!data.welcomed;
+$('welcome-add').onclick=()=>{closeWelcome();showView('script');};
+$('welcome-demo').onclick=closeWelcome;
 render();if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});

@@ -17,7 +17,7 @@ const RU=I.dictionary.ru,norm=s=>s.replace(/\s+/g,' ').trim();const missing=[];
 for(const file of ['dist/app.js','dist/pdf-reader.js']){const src=fs.readFileSync(file,'utf8');for(const call of src.matchAll(/\bt\(([^()]*)\)/g))for(const m of call[1].matchAll(/'((?:[^'\\]|\\.)*)'/g)){const text=m[1].replace(/\\n/g,'\n');if(!(text in RU))missing.push(file+': '+text);}}
 assert.deepEqual(missing,[],'every t() text has a Russian translation');
 // Static page text: report what has no translation (new text from other changes stays English until added).
-const html=fs.readFileSync('dist/index.html','utf8').replace(/<script[\s\S]*?<\/script>|<textarea[\s\S]*?<\/textarea>|<select id="(?:language|ui-language)"[\s\S]*?<\/select>/g,'');
+const html=fs.readFileSync('dist/index.html','utf8').replace(/<style[\s\S]*?<\/style>|<script[\s\S]*?<\/script>|<textarea[\s\S]*?<\/textarea>|<select id="(?:language|ui-language)"[\s\S]*?<\/select>/g,'');
 const untranslated=[...html.matchAll(/>([^<]+)</g)].map(m=>norm(m[1].replace(/&nbsp;/g,' ').replace(/&amp;/g,'&'))).filter(s=>/\p{L}{2}/u.test(s)&&!(s in RU)&&!['cue','Cue'].includes(s));
 if(untranslated.length)console.log('Interface text without a Russian translation (shown in English):\n  '+untranslated.join('\n  '));
 console.log('Interface language passed: English default, saved choice, Russian plurals, and a translation for every app message.');
