@@ -1,7 +1,40 @@
 (function(root){
   // Stretched or stammered words («ну-у», «да-а-а», «н-нет», «нууу») are written for the actor; speech recognition hears the plain word.
   function unstretch(text){return text.replace(/(\p{L})(?:[-‐‑]\1+)+(?!\p{L})/gu,'$1').replace(/(?<!\p{L})(\p{L})[-‐‑](?=\1)/gu,'').replace(/(\p{L})\1{2,}/gu,'$1');}
-  function normalize(text){return unstretch(text.normalize('NFKC').replace(/\u0301/g,'').toLocaleLowerCase().replace(/ё/g,'е').replace(/[’‘]/g,"'")).replace(/[^\p{L}\p{N}\s']/gu,' ').replace(/'/g,'').replace(/\s+/g,' ').trim();}
+  function normalize(text){return numbers(unstretch(text.normalize('NFKC').replace(/\u0301/g,'').toLocaleLowerCase().replace(/ё/g,'е').replace(/[’‘]/g,"'")).replace(/(\d)\s*[-‐‑]\s*(?:[а-я]{1,3}|st|nd|rd|th)(?!\p{L})/gu,'$1').replace(/(\d)(?:st|nd|rd|th)(?!\p{L})/gu,'$1').replace(/(\d)[\s\u00a0](?=\d{3}(?!\d))/gu,'$1').replace(/[^\p{L}\p{N}\s']/gu,' ').replace(/'/g,'').replace(/\s+/g,' ').trim());}
+  // Numbers: recognition writes «16 лет» for «шестнадцать лет», «1985» for «тысяча девятьсот восемьдесят пятый».
+  // Both sides become the same number tokens: a number word in any case form (шестнадцать, шестнадцати, шестнадцатого) is its value,
+  // and digits are split the way they are said: 25 → 20 5, 1985 → 1000 900 80 5, 2000 → 2 1000.
+  const E='(?:ь|и|ью|ый|ий|ая|ое|ого|ому|ом|ую|ой|ые|ых|ым|ыми)';
+  const NUMBER_WORDS=[
+    [/^(?:од(?:ин|на|но|ного|ной|ному|ним|ну|ном))$/,1],[/^перв(?:ый|ая|ое|ого|ому|ом|ую|ой|ые|ых|ым)$/,1],
+    [/^(?:два|две|двух|двум|двумя)$/,2],[/^втор(?:ой|ая|ое|ого|ому|ом|ую|ые|ых|ым)$/,2],
+    [/^(?:три|трех|трем|тремя)$/,3],[/^трет(?:ий|ья|ье|ьего|ьему|ьем|ью|ьей|ьи|ьих)$/,3],
+    [/^(?:четыре|четырех|четырем|четырьмя)$/,4],[/^четверт(?:ый|ая|ое|ого|ому|ом|ую|ой|ые|ых)$/,4],
+    [new RegExp('^пят'+E+'$'),5],[new RegExp('^шест'+E+'$'),6],[/^(?:семь|семи|семью)$/,7],[/^седьм(?:ой|ая|ое|ого|ому|ом|ую|ые|ых)$/,7],
+    [/^(?:восемь|восьми|восемью|восьмью)$/,8],[/^восьм(?:ой|ая|ое|ого|ому|ом|ую|ые|ых)$/,8],[new RegExp('^девят'+E+'$'),9],[new RegExp('^десят'+E+'$'),10],
+    ...['одиннадцат','двенадцат','тринадцат','четырнадцат','пятнадцат','шестнадцат','семнадцат','восемнадцат','девятнадцат'].map((stem,i)=>[new RegExp('^'+stem+E+'$'),11+i]),
+    [new RegExp('^двадцат'+E+'$'),20],[new RegExp('^тридцат'+E+'$'),30],[/^(?:сорок|сорока|сороков(?:ой|ая|ое|ого|ом|ые|ых))$/,40],
+    ...['пят','шест','сем','восем'].map((stem,i)=>[new RegExp('^'+stem+'(?:ь|и|ью)?дес(?:ят|яти|ятью|ят'+E+')$'),50+10*i]),[/^восьмидесят(?:и|ый|ая|ое|ого|ом|ые|ых)?$/,80],
+    [/^девяност(?:о|а|ый|ая|ое|ого|ому|ом|ые|ых)$/,90],[/^(?:сто|ста|сотый|сотая|сотое|сотого|сотом)$/,100],[/^(?:двести|двухсот|двумстам)$/,200],
+    [/^(?:триста|трехсот|тремстам)$/,300],[/^(?:четыреста|четырехсот|четыремстам)$/,400],
+    ...['пят','шест','сем','восем','девят'].map((stem,i)=>[new RegExp('^'+stem+'(?:ь|и)сот(?:ый|ая|ое|ого|ом)?$'),500+100*i]),[/^восьмисот(?:ый|ая|ое|ого|ом)?$/,800],
+    [/^(?:тысяч(?:а|и|у|е|ей|ью|ам|ами|ах)?|тысячн(?:ый|ая|ое|ого|ом))$/,1000],[/^миллион(?:а|у|ом|е|ы|ов|ам|ами|ах|ный|ного)?$/,1000000],
+    ...['zero','one','two','three','four','five','six','seven','eight','nine','ten','eleven','twelve','thirteen','fourteen','fifteen','sixteen','seventeen','eighteen','nineteen'].map((w,i)=>[new RegExp('^'+w+'$'),i]),
+    ...['twenty','thirty','forty','fifty','sixty','seventy','eighty','ninety'].map((w,i)=>[new RegExp('^'+w+'$'),20+10*i]),
+    [/^hundred$/,100],[/^thousand$/,1000],[/^million$/,1000000]];
+  function numberWord(word){for(const [re,value] of NUMBER_WORDS)if(re.test(word))return value;return null;}
+  function spokenParts(n){if(n<20)return [n];if(n<100)return n%10?[n-n%10,n%10]:[n];if(n<1000)return [Math.floor(n/100)*100,...(n%100?spokenParts(n%100):[])];
+    for(const big of [1000000,1000])if(n>=big){const head=Math.floor(n/big),rest=n%big;return [...(head===1?[]:spokenParts(head)),big,...(rest?spokenParts(rest):[])];}return [n];}
+  function numbers(text){if(!text)return text;const out=[];for(const word of text.split(' ')){
+    if(/^\d{1,9}$/.test(word)&&!/^0\d/.test(word)){out.push(...spokenParts(Number(word)).map(String));continue;}
+    const value=numberWord(word);if(value===null){out.push(word);continue;}
+    const last=out.length?Number(out[out.length-1]):NaN;
+    // «one hundred», «two hundred»: one token, as «сто», «двести»; «one thousand» as «тысяча».
+    if(value===100&&last>=1&&last<=9&&out[out.length-1]===String(last)){out[out.length-1]=String(last*100);continue;}
+    if((value===1000||value===1000000)&&last===1){out[out.length-1]=String(value);continue;}
+    out.push(String(value));}
+    return out.join(' ');}
   function speakerKey(name){return name.normalize('NFKC').toLocaleLowerCase().replace(/ё/g,'е').replace(/[.\s]+/g,' ').trim();}
   function resolveSpeaker(label,cast=[]){
     const key=speakerKey(label);const exact=cast.find(name=>speakerKey(name)===key);if(exact)return exact;
@@ -26,9 +59,9 @@
   function flattenBrackets(text){let depth=0,out='';for(const char of text){if(char==='['){if(!depth++)out+=char;}else if(char===']'){if(depth&&!--depth)out+=char;}else out+=char;}return depth?out+']':out;}
   function editDistance(a,b,same=(x,y)=>x===y){let prev=Array.from({length:b.length+1},(_,j)=>j);for(let i=1;i<=a.length;i++){const row=[i];for(let j=1;j<=b.length;j++)row[j]=Math.min(prev[j]+1,row[j-1]+1,prev[j-1]+(same(a[i-1],b[j-1])?0:1));prev=row;}return prev[b.length];}
   // Recognition often misses an ending («нормальна») or splits a word («все таки»), so long lines forgive a little.
-  function closeWords(a,b){return a===b||(Math.min(a.length,b.length)>=4&&editDistance(a,b)<=1);}
+  function closeWords(a,b){return a===b||(Math.min(a.length,b.length)>=4&&!/\d/.test(a+b)&&editDistance(a,b)<=1);}
   // Unusual word forms («перегарищем») often come back as a plainer form of the same word («перегаром»): same start, different ending. That counts as half a mistake.
-  function sameStem(a,b){const n=Math.min(a.length,b.length);if(n<5)return false;let p=0;while(p<n&&a[p]===b[p])p++;return p>=5&&p>=0.6*n;}
+  function sameStem(a,b){const n=Math.min(a.length,b.length);if(n<5||/\d/.test(a+b))return false;let p=0;while(p<n&&a[p]===b[p])p++;return p>=5&&p>=0.6*n;}
   function wordCost(a,b){return closeWords(a,b)?0:sameStem(a,b)?0.5:1;}
   // Hyphenated particles («перегарищем-то», «дай-ка», «всё-таки») are often dropped or glued on by recognition, so a line also matches without them.
   const PARTICLE=/[-‐‑](?:то|ка|таки|де)(?!\p{L})/giu,PARTICLE_WORDS=new Set(['то','ка','таки','де']);

@@ -186,7 +186,7 @@
   'Speak your line':'Произнесите реплику',
   '🎙 Speak':'🎙 Говорить',
   '● Listening… ↻':'● Слушаю… ↻',
-  'Hands-free · press and hold to pause':'Без рук · нажмите и держите для паузы',
+  'Hands-free · tap to look, hold to pause':'Без рук · нажмите, чтобы посмотреть, держите для паузы',
   'Your scene partner speaks. You take your cue.':'Партнёр говорит. Вы подхватываете.',
   'No lines were recognized. Fix the scene text in Script, or go to the next scene.':'Реплики не распознаны. Исправьте текст сцены в разделе «Пьеса» или перейдите к следующей сцене.',
   'This scene has no dialogue. Read the direction, then move on.':'В этой сцене нет реплик. Прочитайте ремарку и идите дальше.',

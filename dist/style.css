@@ -93,7 +93,7 @@ body.rehearsing.pocket .pocket-guard{display:flex;position:fixed;inset:0;z-index
 body.rehearsing.pocket .pocket-guard span{font:13px 'PT Mono',ui-monospace,monospace;color:var(--muted);border-top:1px solid var(--line);padding-top:14px;width:100%;max-width:420px;text-align:center}
 body.rehearsing.pocket .pocket-guard.holding span{color:var(--ink);background:linear-gradient(90deg,var(--lime) 0 100%) no-repeat 0 0/100% 3px;animation:pocket-hold .8s linear}
 @keyframes pocket-hold{from{background-size:0 3px}to{background-size:100% 3px}}
-body.rehearsing.pocket .stage-card .transport,body.rehearsing.pocket .feedback .count-it{display:none!important}
+body.rehearsing.pocket .transport,body.rehearsing.pocket .feedback .count-it{display:none!important}
 @media(max-width:650px){.role-card>.setting-row.mobile-row{display:flex}}
 
 /* Partner's pace on the phone; long partner speeches in smaller type; troubleshooting folded away at the bottom of Settings. */
@@ -206,4 +206,8 @@ dialog{color:var(--ink)}
 dialog h2{margin-top:6px}
 #test-voice+.auto-listen-setting{margin-top:18px}
 
+/* Hands-free black screen: looks switched off, the run goes on. */
+body.rehearsing.pocket .pocket-guard{transition:background-color .8s}
+body.rehearsing.pocket .pocket-guard.dark{background:#000}
+body.rehearsing.pocket .pocket-guard.dark span{color:#a3a3a3;font-size:15px;border-top-color:#333}
 .pdf-review ul{margin:6px 0 0;padding-left:18px}

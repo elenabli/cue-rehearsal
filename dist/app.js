@@ -264,7 +264,11 @@ $('hint-cue').onclick=()=>{markTrouble();const cue=lines[data.index-1];hint.open
 $('hear-line').onclick=()=>{const text=['directions','review'].includes(data.scenes[data.activeScene].kind)?data.script.replace(/[\[\]]/g,''):lines[data.index]?.text;if(text){pause();speak(text);}};
 function toggleHide(){data.hide=!data.hide;render();}$('pocket-toggle').onclick=()=>{pause();data.pocket=!data.pocket;render();};
 // Hands-free mode ignores taps (the phone is in a pocket); press and hold anywhere to pause.
-{const guard=$('pocket-guard');let hold=null;const cancel=()=>{clearTimeout(hold);guard.classList.remove('holding');};guard.onpointerdown=e=>{e.preventDefault?.();cancel();guard.classList.add('holding');hold=setTimeout(()=>{guard.classList.remove('holding');if(running)pause();},800);};guard.onpointerup=guard.onpointercancel=guard.onpointerleave=cancel;guard.oncontextmenu=e=>e.preventDefault?.();}$('hide-toggle').onclick=toggleHide;
+{const guard=$('pocket-guard');let hold=null;const cancel=()=>{clearTimeout(hold);guard.classList.remove('holding');};// Black screen: a few seconds into a hands-free run the screen goes fully black (it stays awake, so the mic and voice keep going).
+ // A touch shows the scene again for a few seconds; press and hold still pauses.
+ let lastTouch=0;const DARK_AFTER=6000;if(typeof setInterval==='function')setInterval(()=>{const on=running&&data.pocket&&!document.hidden;guard.classList.toggle('dark',on&&Date.now()-lastTouch>DARK_AFTER&&Date.now()-runSince>DARK_AFTER);if(!on)runSince=Date.now();},500);
+ let runSince=Date.now();guard.addEventListener?.('pointerdown',()=>{lastTouch=Date.now();guard.classList.remove('dark');});guard.addEventListener?.('pointerup',()=>{lastTouch=Date.now();});
+ guard.onpointerdown=e=>{e.preventDefault?.();cancel();guard.classList.add('holding');hold=setTimeout(()=>{guard.classList.remove('holding');if(running)pause();},800);};guard.onpointerup=guard.onpointercancel=guard.onpointerleave=cancel;guard.oncontextmenu=e=>e.preventDefault?.();}$('hide-toggle').onclick=toggleHide;
 $('role').onchange=e=>{const selectedRole=e.target.value;if(!roles.includes(selectedRole))return;pause();data.role=selectedRole;data.index=0;feedback();render();goToOwnScene();};
 $('typed-form').onsubmit=e=>{e.preventDefault();if(!recognition&&!speaking&&!pendingAdvance)check([$('typed').value]);};
 $('pace').value=data.pace;$('pace').onchange=e=>{pause();data.pace=e.target.value;persist();};
