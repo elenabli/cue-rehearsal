@@ -6,7 +6,18 @@ workers_dev = true
 [vars]
 # Pages allowed to call the proxy (comma-separated).
 ALLOWED_ORIGINS = "https://elenabli.github.io,http://localhost:4173,http://127.0.0.1:4173"
+# Imports allowed per day without an invite code: in total, and per address.
+DAILY_LIMIT = "20"
+PER_IP_LIMIT = "5"
+
+[[durable_objects.bindings]]
+name = "COUNTER"
+class_name = "DailyCounter"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["DailyCounter"]
 
 # Secrets (set by .github/workflows/proxy.yml from the repository's secrets):
 #   ANTHROPIC_API_KEY  key from console.anthropic.com
-#   INVITE_CODES       comma-separated codes that may use the proxy
+#   INVITE_CODES       comma-separated codes that skip the daily limits

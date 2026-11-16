@@ -1,10 +1,10 @@
 # Cue proxy
 
-A small Cloudflare Worker that holds Cue's AI keys, so the app (a static site on GitHub Pages) never sees them. It does only Cue's own jobs, and only for invite codes. It stores nothing.
+A small Cloudflare Worker that holds Cue's AI keys, so the app (a static site on GitHub Pages) never sees them. It does only Cue's own jobs. Anyone using Cue may import up to `PER_IP_LIMIT` plays a day, with `DAILY_LIMIT` imports a day in total (see `wrangler.toml`); an invite code skips both. It stores no plays, only today's counts.
 
 | Path | What it does |
 | --- | --- |
-| `GET /ping` | Checks the invite code and whether the Anthropic key is set |
+| `GET /ping` | Checks whether the Anthropic key is set |
 | `POST /import` | `{model: "haiku"\|"sonnet"\|"opus", lines: [...]}` → Claude labels each line (scene, speech, direction, skip) and lists the cast; the answer streams back to the app, which rebuilds the play from its own lines (`dist/ai-import.js`) |
 
 ## Setup (once)
@@ -15,10 +15,12 @@ A small Cloudflare Worker that holds Cue's AI keys, so the app (a static site on
    - `CLOUDFLARE_API_TOKEN`: the token from step 2
    - `CLOUDFLARE_ACCOUNT_ID`: the account ID from step 2
    - `ANTHROPIC_API_KEY`: the key from step 1
-   - `INVITE_CODES`: any word you make up, for example `curtain-call` (several codes: separate with commas)
+   - `INVITE_CODES`: any word you make up, for example `curtain-call` (several codes: separate with commas). A code skips the daily limits.
 4. **Deploy.** Actions → **Deploy the AI proxy** → Run workflow (it also runs by itself when `proxy/` changes on main). The log of the "Deploy" step shows the address, like `https://cue-proxy.your-name.workers.dev`.
 5. **Try it.** Open `https://elenabli.github.io/cue-rehearsal/ai-test.html`, paste the address and your invite code, press **Check the proxy**, then choose a play and **Read the play**.
 
 To change a key later, update the GitHub secret and run the workflow again.
 
 If a model answers with a rate-limit error, the Anthropic account is on its first usage tier; buying more credit raises the limit.
+
+**Spending cap.** In the Anthropic console → Settings → Limits, set a monthly spend limit (for example $10). It is the hard ceiling whatever happens to the proxy.

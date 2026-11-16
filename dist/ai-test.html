@@ -29,7 +29,7 @@
 
 <label for="proxy">Proxy address</label>
 <input type="text" id="proxy" placeholder="https://cue-proxy.your-name.workers.dev" autocomplete="off">
-<label for="code">Invite code</label>
+<label for="code">Invite code (optional, skips the daily limit)</label>
 <input type="password" id="code" autocomplete="off">
 <label for="file">Play (PDF, Word .docx or .txt)</label>
 <input type="file" id="file" accept=".pdf,.docx,.txt,application/pdf">
@@ -38,9 +38,9 @@
 <p id="status" class="muted"></p>
 <div id="results"></div>
 
-<script src="./pdf-import.js"></script>
-<script src="./docx-import.js"></script>
-<script src="./ai-import.js"></script>
+<script src="./pdf-import.js?v=2"></script>
+<script src="./docx-import.js?v=2"></script>
+<script src="./ai-import.js?v=2"></script>
 <script>
 const $=id=>document.getElementById(id);
 const store={get:k=>{try{return localStorage.getItem(k)||''}catch{return ''}},set:(k,v)=>{try{localStorage.setItem(k,v)}catch{}}};
