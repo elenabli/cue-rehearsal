@@ -1,5 +1,5 @@
-/* Files are parsed locally. With a smart import code (Settings), the extracted
-   text is sent once to Cue's proxy so Claude can split it; otherwise nothing leaves the phone. */
+/* Files are parsed locally. Unless Settings → Read uploaded plays with AI is off, the
+   extracted text is sent once to Cue's proxy so Claude can split it. */
 (function(){
  const byId=id=>document.getElementById(id);const t=(text,vars)=>window.CueI18n?window.CueI18n.t(text,vars):String(text).replace(/\{(\w+)\}/g,(m,k)=>vars&&k in vars?vars[k]:m);let loading=null,pdf=null,pdfName='',generation=0,busy=false;
  const status=(message,error=false)=>{byId('pdf-status').textContent=message;byId('pdf-status').classList.toggle('import-error',error);};
@@ -13,11 +13,13 @@
  }
  const PROXY='https://cue-proxy.elena-blinova.workers.dev';
  const aiCode=()=>{try{return (localStorage.getItem('cue-ai-code')||'').trim();}catch{return '';}};
- if(byId('ai-code')){byId('ai-code').value=aiCode();byId('ai-code').oninput=e=>{try{localStorage.setItem('cue-ai-code',e.target.value.trim());}catch{}};}
+ // On unless turned off in Settings. An invite code (if saved) only skips the proxy's daily limit.
+ const aiOn=()=>{try{return localStorage.getItem('cue-ai-off')!=='1';}catch{return true;}};
+ if(byId('ai-import')){byId('ai-import').checked=aiOn();byId('ai-import').onchange=e=>{try{localStorage.setItem('cue-ai-off',e.target.checked?'0':'1');}catch{}};}
  const listHtml=items=>'<ul>'+items.map(i=>'<li>'+String(i).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))+'</li>').join('')+'</ul>';
  // Smart import: Claude splits the play. Returns {ok:true}, {ok:false,reason} or null when not tried.
  async function smartDraft(text,name){
-  const code=aiCode();if(!code||!window.CueAI||navigator.onLine===false)return null;
+  const code=aiCode();if(!aiOn()||!window.CueAI||navigator.onLine===false)return null;
   const started=Date.now();const secs=()=>Math.round((Date.now()-started)/1000);
   status(t('Reading the play with AI… {s} s',{s:0}));const tick=setInterval(()=>status(t('Reading the play with AI… {s} s',{s:secs()})),1000);
   try{

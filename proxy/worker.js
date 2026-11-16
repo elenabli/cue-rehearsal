@@ -1,7 +1,8 @@
 // Cue proxy: a small Cloudflare Worker that holds the AI keys so the app
 // (a static site on GitHub Pages) never sees them. It only does Cue's own
-// jobs (reading a play), never general chat, and only for invite codes.
-// It stores nothing: requests are passed through and forgotten.
+// jobs (reading a play), never general chat. Anyone may use it within a daily
+// limit (DAILY_LIMIT in total, PER_IP_LIMIT per address); an invite code skips
+// the limits. Plays are passed through and forgotten; only counts are kept.
 
 const MODELS = { haiku: 'claude-haiku-5-5', sonnet: 'claude-sonnet-5-5', opus: 'claude-opus-5-5' };
 // Haiku has no server-side refusal fallback; the others fall back by policy category.
@@ -103,13 +104,39 @@ export function importRequest(body) {
   return { request, headers };
 }
 
+// Counts imports per day in a Durable Object (SQLite storage, free plan).
+export class DailyCounter {
+  constructor(state) { this.state = state; }
+  async fetch(request) {
+    const { day, ip, total, perIp } = await request.json();
+    const [all, mine] = await Promise.all([this.state.storage.get('all:' + day), this.state.storage.get('ip:' + day + ':' + ip)]);
+    if ((all || 0) >= total) return Response.json({ ok: false, reason: 'day' });
+    if ((mine || 0) >= perIp) return Response.json({ ok: false, reason: 'ip' });
+    await this.state.storage.put({ ['all:' + day]: (all || 0) + 1, ['ip:' + day + ':' + ip]: (mine || 0) + 1 });
+    // Forget earlier days.
+    const keys = [...(await this.state.storage.list({ limit: 1000 })).keys()].filter(k => !k.includes(':' + day));
+    if (keys.length) await this.state.storage.delete(keys.slice(0, 128));
+    return Response.json({ ok: true, left: total - (all || 0) - 1 });
+  }
+}
+
+// Returns null when allowed, or a message when today's limit is used up.
+export async function takeQuota(request, env) {
+  if (validCode(request.headers.get('x-cue-code'), env)) return null;
+  if (!env.COUNTER) return null;
+  const day = new Date().toISOString().slice(0, 10);
+  const ip = request.headers.get('cf-connecting-ip') || 'unknown';
+  const stub = env.COUNTER.get(env.COUNTER.idFromName('imports'));
+  const r = await (await stub.fetch('https://counter/take', { method: 'POST', body: JSON.stringify({ day, ip, total: Number(env.DAILY_LIMIT) || 20, perIp: Number(env.PER_IP_LIMIT) || 5 }) })).json();
+  if (r.ok) return null;
+  return r.reason === 'ip' ? 'You have read the most plays allowed today. Try again tomorrow.' : 'Smart import is busy today. Try again tomorrow.';
+}
+
 export default {
   async fetch(request, env) {
     const headers = cors(request, env);
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers });
     const url = new URL(request.url);
-    if (!validCode(request.headers.get('x-cue-code'), env)) return json({ error: 'Unknown invite code.' }, 401, headers);
-
     if (url.pathname === '/ping' && request.method === 'GET') {
       return json({ ok: true, import: !!env.ANTHROPIC_API_KEY }, 200, headers);
     }
@@ -122,6 +149,8 @@ export default {
       } catch (error) {
         return json({ error: error.message || 'Bad request.' }, 400, headers);
       }
+      const limited = await takeQuota(request, env);
+      if (limited) return json({ error: limited }, 429, headers);
       const upstream = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: { ...built.headers, 'x-api-key': env.ANTHROPIC_API_KEY },

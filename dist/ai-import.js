@@ -80,7 +80,7 @@
 
   async function smartImport({proxy,code,model,text,onProgress}){
     const lines=playLines(text);const started=Date.now();
-    const response=await fetch(proxy.replace(/\/+$/,'')+'/import',{method:'POST',headers:{'content-type':'application/json','x-cue-code':code},body:JSON.stringify({model,lines})});
+    const response=await fetch(proxy.replace(/\/+$/,'')+'/import',{method:'POST',headers:{'content-type':'application/json',...(code?{'x-cue-code':code}:{})},body:JSON.stringify({model,lines})});
     const result=await readStream(response,onProgress);
     return {...result,...toScript(lines,result.labels),seconds:(Date.now()-started)/1000,cost:cost(result.usage,result.model),lines:lines.length};
   }

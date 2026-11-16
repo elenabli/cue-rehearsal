@@ -108,9 +108,29 @@ const Core = require('../dist/core.js');
   const env = { INVITE_CODES: 'lena', ANTHROPIC_API_KEY: 'k', ALLOWED_ORIGINS: 'https://elenabli.github.io' };
   let sent = null;
   globalThis.fetch = async (url, init) => { sent = { url, init }; return new Response(sse, { status: 200, headers: { 'content-type': 'text/event-stream' } }); };
-  const denied = await worker.default.fetch(new Request('https://p.dev/ping', { headers: { 'x-cue-code': 'nope' } }), env);
-  assert.strictEqual(denied.status, 401);
-  const ok = await worker.default.fetch(new Request('https://p.dev/import', { method: 'POST', headers: { 'x-cue-code': 'lena', origin: 'https://elenabli.github.io' }, body: JSON.stringify({ model: 'sonnet', lines: ['X: hi'] }) }), env);
+  const ping = await worker.default.fetch(new Request('https://p.dev/ping'), env);
+  assert.strictEqual(ping.status, 200, 'no code needed');
+
+  // Daily limits, with an in-memory Durable Object.
+  const store = new Map();
+  const counter = new worker.DailyCounter({ storage: {
+    get: async k => store.get(k), put: async o => { for (const [k, v] of Object.entries(o)) store.set(k, v); },
+    list: async () => new Map(store), delete: async keys => keys.forEach(k => store.delete(k)),
+  } });
+  store.set('all:2000-01-01', 9);
+  const limitedEnv = { ...env, DAILY_LIMIT: '3', PER_IP_LIMIT: '2', COUNTER: { idFromName: n => n, get: () => ({ fetch: (u, init) => counter.fetch(new Request(u, init)) }) } };
+  const take = (ip, code) => worker.takeQuota(new Request('https://p.dev/import', { headers: { 'cf-connecting-ip': ip, ...(code ? { 'x-cue-code': code } : {}) } }), limitedEnv);
+  assert.strictEqual(await take('1.1.1.1'), null);
+  assert.ok(!store.has('all:2000-01-01'), 'old days forgotten');
+  assert.strictEqual(await take('1.1.1.1'), null);
+  assert.match(await take('1.1.1.1'), /most plays allowed today/);
+  assert.strictEqual(await take('2.2.2.2'), null);
+  assert.match(await take('3.3.3.3'), /busy today/);
+  assert.strictEqual(await take('3.3.3.3', 'lena'), null, 'invite code skips limits');
+  const busy = await worker.default.fetch(new Request('https://p.dev/import', { method: 'POST', headers: { 'cf-connecting-ip': '4.4.4.4' }, body: JSON.stringify({ lines: ['X: hi'] }) }), limitedEnv);
+  assert.strictEqual(busy.status, 429);
+  await assert.rejects(AI.readStream(busy), /busy today/);
+  const ok = await worker.default.fetch(new Request('https://p.dev/import', { method: 'POST', headers: { origin: 'https://elenabli.github.io' }, body: JSON.stringify({ model: 'sonnet', lines: ['X: hi'] }) }), env);
   assert.strictEqual(ok.status, 200);
   assert.strictEqual(ok.headers.get('access-control-allow-origin'), 'https://elenabli.github.io');
   assert.strictEqual(sent.init.headers['x-api-key'], 'k');
