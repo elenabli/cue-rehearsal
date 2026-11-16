@@ -8,6 +8,7 @@
  const ru=(n,one,few,many)=>{const a=Math.abs(n)%100,b=a%10;return a>10&&a<20?many:b===1?one:b>=2&&b<=4?few:many;};
  const en=(n,one,many)=>n===1?one:many;
  const EN={
+  '{n} lines to work on.':v=>`${v.n} ${en(v.n,'line','lines')} to work on.`,
   '{n} scenes':v=>`${v.n} ${en(v.n,'scene','scenes')}`,
   'Replace the plays on this device with the {n} plays in the backup?':v=>`Replace the plays on this device with the ${v.n} ${en(v.n,'play','plays')} in the backup?`,
   '{n} lines':v=>`${v.n} ${en(v.n,'line','lines')}`,
@@ -19,6 +20,15 @@
   'Extracted {n} pages.':v=>`Extracted ${v.n} ${en(v.n,'page','pages')}.`,
  };
  const RU={
+  'HARD LINES DONE':'ТРУДНЫЕ РЕПЛИКИ ПРОЙДЕНЫ',
+  'All clear.':'Всё чисто.',
+  '▶ Start from here':'▶ Начать отсюда',
+  'Read':'Читать',
+  'Back one line':'На реплику назад',
+  '‹ Back':'‹ Назад',
+  'Tap a line to start from it.':'Нажмите на реплику, чтобы начать с неё.',
+  '{n} lines to work on.':v=>`${ru(v.n,'Осталась','Остались','Осталось')} ${v.n} ${ru(v.n,'трудная реплика','трудные реплики','трудных реплик')}.`,
+  'Rehearse the hard lines ({n})':v=>`Повторить трудные реплики (${v.n})`,
   'Your plays':'Ваши пьесы',
   '＋ Add a play':'＋ Добавить пьесу',
   'New play: upload it or paste it below, then save.':'Новая пьеса: загрузите или вставьте её ниже, затем сохраните.',
