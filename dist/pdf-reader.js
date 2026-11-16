@@ -1,4 +1,5 @@
-/* Files are parsed locally; no PDF, Word file or extracted text is uploaded. */
+/* Files are parsed locally. Unless Settings → Read uploaded plays with AI is off, the
+   extracted text is sent once to Cue's proxy so Claude can split it. */
 (function(){
  const byId=id=>document.getElementById(id);const t=(text,vars)=>window.CueI18n?window.CueI18n.t(text,vars):String(text).replace(/\{(\w+)\}/g,(m,k)=>vars&&k in vars?vars[k]:m);let loading=null,pdf=null,pdfName='',generation=0,busy=false;
  const status=(message,error=false)=>{byId('pdf-status').textContent=message;byId('pdf-status').classList.toggle('import-error',error);};
@@ -10,11 +11,36 @@
   const sceneCount=CuePdf.splitPlayScenes(converted).scenes.length;
   byId('pdf-review').hidden=false;byId('pdf-review').textContent=sceneCount?t('Found {n} scenes. Italic text and text in (parentheses) are kept as stage directions in [brackets]. Review the scene headings, character names, and dialogue below, then choose Save play & rehearse. Each scene will be available in the scene picker.',{n:sceneCount}):t('No scene headings were found. You can add headings such as «Сцена 1» above each scene, or save this as a single scene. Review the character names and dialogue before saving.');
  }
+ const PROXY='https://cue-proxy.elena-blinova.workers.dev';
+ const aiCode=()=>{try{return (localStorage.getItem('cue-ai-code')||'').trim();}catch{return '';}};
+ // On unless turned off in Settings. An invite code (if saved) only skips the proxy's daily limit.
+ const aiOn=()=>{try{return localStorage.getItem('cue-ai-off')!=='1';}catch{return true;}};
+ if(byId('ai-import')){byId('ai-import').checked=aiOn();byId('ai-import').onchange=e=>{try{localStorage.setItem('cue-ai-off',e.target.checked?'0':'1');}catch{}};}
+ const listHtml=items=>'<ul>'+items.map(i=>'<li>'+String(i).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))+'</li>').join('')+'</ul>';
+ // Smart import: Claude splits the play. Returns {ok:true}, {ok:false,reason} or null when not tried.
+ async function smartDraft(text,name){
+  const code=aiCode();if(!aiOn()||!window.CueAI||navigator.onLine===false)return null;
+  const started=Date.now();const secs=()=>Math.round((Date.now()-started)/1000);
+  status(t('Reading the play with AI… {s} s',{s:0}));const tick=setInterval(()=>status(t('Reading the play with AI… {s} s',{s:secs()})),1000);
+  try{
+   const r=await CueAI.smartImport({proxy:PROXY,code,model:'sonnet',text});
+   if(!r.scenes.length||!r.cast.length)throw Error(t('No scenes or characters were found.'));
+   byId('script-input').value=r.script;byId('cast-input').value=r.cast.map(c=>c.name).join('\n');byId('title-input').value=name;byId('script-message').textContent='';
+   const found=t('AI found {s} scenes and {c} characters.',{s:r.scenes.length,c:r.cast.length});
+   const review=byId('pdf-review');review.hidden=false;
+   const notes=(r.notes||[]).join(' ');
+   if(r.warnings.length)review.innerHTML=found+' '+t('Please check:')+listHtml(r.warnings)+(notes?'<p>'+notes.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))+'</p>':'');else review.textContent=found+(notes?' '+notes:'')+' '+t('Look it over, then choose Save and rehearse.');
+   status(t('Read with AI in {s} s.',{s:secs()}));return {ok:true};
+  }catch(error){return {ok:false,reason:error.message};}
+  finally{clearInterval(tick);}
+ }
+ const fallbackNote=ai=>ai&&!ai.ok?' '+t('AI reading didn’t work ({reason}), so Cue used its basic reader.',{reason:String(ai.reason).replace(/[.。]\s*$/,'')}):'';
  const isDocx=file=>/\.docx$/i.test(file.name)||file.type==='application/vnd.openxmlformats-officedocument.wordprocessingml.document';
  async function openDocx(file){
   status(t('Reading your Word file…'));const text=await CueDocx.docxToText(new Uint8Array(await file.arrayBuffer()));
   if(!text.trim())throw Error(t('No text was found in this Word file. Choose another file.'));
-  showDraft(text,file.name.replace(/\.docx$/i,''));status(t('Read the whole Word file. Review the draft below before saving.'));
+  const name=file.name.replace(/\.docx$/i,''),ai=await smartDraft(text,name);if(ai&&ai.ok)return;
+  showDraft(text,name);status(t('Read the whole Word file. Review the draft below before saving.')+fallbackNote(ai));
  }
  byId('pdf-file').onchange=async e=>{
   const file=e.target.files[0];e.target.value='';if(!file)return;const token=++generation;busy=true;controls();byId('pdf-pages').hidden=true;byId('pdf-review').hidden=true;
@@ -39,8 +65,9 @@
   try{
    for(let p=from;p<=to;p++){status(t('Reading page {p} of {n}…',{p,n:to}));const page=await pdf.getPage(p);const text=await CuePdf.extractPageText(page);if(!text.trim())emptyPages++;pages.push(text);page.cleanup();}
    const text=pages.join('\n');if(!text.trim())throw Error(t('No selectable text was found. This looks like a scanned PDF. Run text recognition (OCR) in your PDF app, save it as a searchable PDF, and try again. Your current script has been kept.'));
+   const ai=await smartDraft(text,pdfName);if(ai&&ai.ok)return;
    showDraft(text,pdfName);
-   status(t('Extracted {n} pages.',{n:to-from+1})+(emptyPages?t(' {n} page(s) had no text and were omitted; review the PDF for missing dialogue.',{n:emptyPages}):'')+t(' Review the draft below before saving.'));
+   status(t('Extracted {n} pages.',{n:to-from+1})+(emptyPages?t(' {n} page(s) had no text and were omitted; review the PDF for missing dialogue.',{n:emptyPages}):'')+t(' Review the draft below before saving.')+fallbackNote(ai));
   }catch(error){status(error.message||t('Couldn’t extract this PDF. Your current script has been kept. Try another file.'),true);}
   finally{busy=false;controls();}
  };
