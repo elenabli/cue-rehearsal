@@ -71,10 +71,10 @@
     for(const [pair,n] of mismatch)warnings.push(`Label differs from the chosen character: ${pair} (${n}×).`);
     const silent=cast.filter(c=>!speeches.has(c.name));if(silent.length)warnings.push(`In the cast but never speaks: ${silent.map(c=>c.name).join(', ')}.`);
     const once=[...speeches].filter(([,n])=>n===1).map(([s])=>s);if(once.length)warnings.push(`Speaks only once (maybe a misspelling): ${once.join(', ')}.`);
-    const empty=scenes.filter(s=>!s.speeches).length;if(empty)warnings.push(`${empty} scene(s) have no speech.`);
+    const notes=[];const empty=scenes.filter(s=>!s.speeches).length;if(empty)notes.push(`${empty} scene(s) without words.`);
     const speaking=cast.filter(c=>speeches.has(c.name));
     const script=((speaking.length?(en?'CHARACTERS':'ДЕЙСТВУЮЩИЕ ЛИЦА')+'\n'+speaking.map(c=>c.name).join('\n')+'\n':'')+out.join('\n')).trim();
-    return {script,cast:speaking.map(c=>({...c,speeches:speeches.get(c.name)})),scenes,warnings,title:labels.title||''};
+    return {script,cast:speaking.map(c=>({...c,speeches:speeches.get(c.name)})),scenes,warnings,notes,title:labels.title||''};
   }
 
   async function smartImport({proxy,code,model,text,onProgress}){
