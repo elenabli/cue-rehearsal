@@ -17,12 +17,13 @@
   let ctx=null;
   // Safari plays web audio only after a tap has unlocked it: call this from the Start tap.
   function unlock(){if(root.CuePocketNative)return;try{const AC=root.AudioContext||root.webkitAudioContext;if(!AC)return;ctx=ctx||new AC();if(ctx.state==='suspended')ctx.resume().catch(()=>{});}catch{ctx=null;}}
-  function playWeb(t){if(!ctx)unlock();if(!ctx)return;let at=ctx.currentTime+.02;for(const [f,d,g] of t.notes){const o=ctx.createOscillator(),v=ctx.createGain();o.type='sine';o.frequency.value=f;v.gain.setValueAtTime(0,at);v.gain.linearRampToValueAtTime(g,at+.01);v.gain.exponentialRampToValueAtTime(.001,at+d);o.connect(v);v.connect(ctx.destination);o.start(at);o.stop(at+d+.02);at+=d+gap;}
+  function playWeb(t,volume=1){if(!ctx)unlock();if(!ctx)return;if(ctx.state==='suspended')ctx.resume().catch(()=>{});let at=ctx.currentTime+.02;for(const [f,d,g] of t.notes){const o=ctx.createOscillator(),v=ctx.createGain();o.type='sine';o.frequency.value=f;v.gain.setValueAtTime(0,at);v.gain.linearRampToValueAtTime(g*volume,at+.01);v.gain.exponentialRampToValueAtTime(.001,at+d);o.connect(v);v.connect(ctx.destination);o.start(at);o.stop(at+d+.02);at+=d+gap;}
     // Phones that support web vibration (not iPhone Safari) get a buzz on a wrong line.
     try{if(t.haptic==='buzz')root.navigator?.vibrate?.(300);else if(t.haptic==='success')root.navigator?.vibrate?.(40);}catch{}}
   // Play a tone, then call `then` once it has finished, so the next sound or the microphone doesn't overlap it.
-  function play(kind,then){const t=tones[kind];if(!t){then?.();return;}
-    try{if(root.CuePocketNative)root.CuePocketNative.tone(t.notes,t.haptic,gap);else playWeb(t);}catch{}
+  // volume below 1: a softer tone (the iPhone bridge between voice and mic outside hands-free).
+  function play(kind,then,volume=1){const t=tones[kind];if(!t){then?.();return;}
+    try{if(root.CuePocketNative)root.CuePocketNative.tone(t.notes,t.haptic,gap);else playWeb(t,volume);}catch{}
     if(then)setTimeout(then,Math.round(length(kind)*1000)+80);}
   // Short spoken phrases in the play's language. Unknown languages fall back to the tone alone.
   const phrases={
