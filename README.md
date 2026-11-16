@@ -70,7 +70,7 @@ Scanned PDFs need text recognition (OCR) in a PDF app before import. Review extr
 
 ## Data and browser support
 
-PDF extraction happens on your device. Scripts, the selected character, and progress for each scene are saved in that browser. They do not sync between devices; clearing website data removes them. Use **Export whole play** to keep a copy of the script.
+PDF extraction happens on your device. Scripts, the selected character, and progress for each scene are saved in that browser. Cue keeps several plays, each with its own character, scene and progress: **Script → Add a play** imports another one, and tapping a play in the list opens it. They do not sync between devices, and clearing website data removes them. **Script → Backup → Save a backup** writes one file with every play and its progress; **Restore a backup** brings it back on this or another device.
 
 On Android, use Chrome: it has speech input (through Google's speech service), and the app installs from Chrome with its own icon. Firefox on Android has no speech input, so lines can only be typed there. On Android the mic opens fresh for each of your lines; the iPhone-only settings (one open mic for the whole scene, sharing the audio session) are hidden.
 

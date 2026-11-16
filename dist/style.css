@@ -142,3 +142,16 @@ body.scene-ended #stage-card,body.scene-ended #rehearse>.transport{display:none!
 .end-next{border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:16px 0;margin-bottom:22px;display:grid;gap:4px}.end-next small{font:600 12px 'Golos Text',sans-serif;letter-spacing:1px;text-transform:uppercase;color:#5f5f5d}.end-next b{font-size:17px;font-weight:400}.end-next span{font-size:14px;color:#5f5f5d}.end-next[hidden]{display:none}
 .end-actions{display:grid;gap:10px;font-family:'Golos Text',sans-serif}.end-actions .button{min-height:54px;font-size:16px;border-radius:10px}.end-actions .text-button{font-size:16px;min-height:48px;color:var(--ink)}.end-actions [hidden]{display:none}
 #start{flex-direction:column;gap:1px;line-height:1.2}#start .start-main{display:flex;gap:10px;align-items:center}#start .start-scene{font:12px 'PT Mono',ui-monospace,monospace;opacity:.75;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Script page: your plays, add a play, backup. */
+.plays{max-width:640px;margin:0 0 30px}.plays .field-label{display:block;font:600 14px 'Golos Text',sans-serif;margin:0 0 8px}
+.play-list{list-style:none;margin:0 0 14px;padding:0;border-top:1px solid var(--line)}
+.play-row{display:flex;align-items:stretch;border-bottom:1px solid var(--line)}
+.play-open{flex:1;display:flex;justify-content:space-between;align-items:baseline;gap:12px;background:transparent;text-align:left;padding:14px 6px;min-height:52px}
+.play-title{font:600 16px 'Golos Text',sans-serif}.play-meta{font-size:13px;color:#5f5f5d;white-space:nowrap}
+.play-row.current .play-title{background:linear-gradient(transparent 15%,var(--marker) 15% 85%,transparent 85%);padding:0 2px}
+.play-delete{background:transparent;width:48px;font-size:22px;color:#6b6b69}
+#add-play{min-height:48px;font-size:15px;border-radius:10px;width:100%}
+.adding-note{display:flex;justify-content:space-between;align-items:center;gap:12px;background:var(--marker);padding:12px 14px;border-radius:8px;font-size:15px;margin:0}.adding-note[hidden]{display:none}.adding-note .text-button{font-size:15px;color:var(--ink);text-decoration:underline}
+.backup{margin-top:18px}.backup>summary{cursor:pointer;font-size:14px;color:#5f5f5d;padding:10px 0;list-style:none}.backup>summary::-webkit-details-marker{display:none}.backup>summary::before{content:'+ '}.backup[open]>summary::before{content:'− '}
+.backup p{font-size:14px;line-height:1.5;color:#5f5f5d;margin:4px 0 12px}.backup-actions{display:flex;gap:10px;flex-wrap:wrap}.backup-actions .button{font-size:14px;min-height:44px}
+.home-play-top{display:flex;justify-content:space-between;align-items:center}#change-play{font-size:14px;color:var(--ink);text-decoration:underline;text-underline-offset:3px}#change-play[hidden]{display:none}

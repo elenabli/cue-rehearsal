@@ -8,6 +8,8 @@
  const ru=(n,one,few,many)=>{const a=Math.abs(n)%100,b=a%10;return a>10&&a<20?many:b===1?one:b>=2&&b<=4?few:many;};
  const en=(n,one,many)=>n===1?one:many;
  const EN={
+  '{n} scenes':v=>`${v.n} ${en(v.n,'scene','scenes')}`,
+  'Replace the plays on this device with the {n} plays in the backup?':v=>`Replace the plays on this device with the ${v.n} ${en(v.n,'play','plays')} in the backup?`,
   '{n} lines':v=>`${v.n} ${en(v.n,'line','lines')}`,
   'You said all {n} of your lines.':v=>v.n===1?'You said your line.':`You said all ${v.n} of your lines.`,
   '{n} lines in this scene':v=>`${v.n} ${en(v.n,'line','lines')} in this scene`,
@@ -17,6 +19,23 @@
   'Extracted {n} pages.':v=>`Extracted ${v.n} ${en(v.n,'page','pages')}.`,
  };
  const RU={
+  'Your plays':'Ваши пьесы',
+  '＋ Add a play':'＋ Добавить пьесу',
+  'New play: upload it or paste it below, then save.':'Новая пьеса: загрузите или вставьте её ниже, затем сохраните.',
+  'Cancel':'Отмена',
+  'Backup':'Резервная копия',
+  'One file with all your plays, roles and progress. Keep it to restore on this or another phone.':'Один файл со всеми пьесами, ролями и прогрессом. Сохраните его, чтобы восстановить на этом или другом телефоне.',
+  '↓ Save a backup':'↓ Сохранить копию',
+  '↑ Restore a backup':'↑ Восстановить из копии',
+  'Change play':'Другая пьеса',
+  'Open now':'Открыта',
+  'Backup saved to your downloads.':'Копия сохранена в загрузки.',
+  'This file is not a Cue backup.':'Это не резервная копия Cue.',
+  'Browser storage is full or unavailable. Save a backup, then delete a play you no longer need.':'Память браузера заполнена или недоступна. Сохраните копию и удалите ненужную пьесу.',
+  'Delete “{title}” and its progress?':v=>`Удалить «${v.title}» и её прогресс?`,
+  'Delete “{title}”':v=>`Удалить «${v.title}»`,
+  '{n} scenes':v=>`${v.n} ${ru(v.n,'сцена','сцены','сцен')}`,
+  'Replace the plays on this device with the {n} plays in the backup?':v=>`Заменить пьесы на этом устройстве пьесами из копии (${v.n})?`,
   'SCENE DONE':'СЦЕНА ПРОЙДЕНА',
   'You know this scene.':'Вы знаете эту сцену.',
   'Start again':'Начать заново',
