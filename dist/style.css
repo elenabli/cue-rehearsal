@@ -155,3 +155,27 @@ body.scene-ended #stage-card,body.scene-ended #rehearse>.transport{display:none!
 .backup{margin-top:18px}.backup>summary{cursor:pointer;font-size:14px;color:#5f5f5d;padding:10px 0;list-style:none}.backup>summary::-webkit-details-marker{display:none}.backup>summary::before{content:'+ '}.backup[open]>summary::before{content:'− '}
 .backup p{font-size:14px;line-height:1.5;color:#5f5f5d;margin:4px 0 12px}.backup-actions{display:flex;gap:10px;flex-wrap:wrap}.backup-actions .button{font-size:14px;min-height:44px}
 .home-play-top{display:flex;justify-content:space-between;align-items:center}#change-play{font-size:14px;color:var(--ink);text-decoration:underline;text-underline-offset:3px}#change-play[hidden]{display:none}
+/* Read button on Home; back one line while rehearsing. */
+#rehearse>.transport #read-scene{min-height:54px;font-size:16px;border-radius:10px;background:#fff;padding:0 18px}
+body.rehearsing #read-scene{display:none}
+/* Reading view: the scene as a typed page. Your lines carry the marker; tap a line to start from it. */
+body.reading #home,body.reading #stage-card,body.reading #rehearse>.transport,body.reading #scene-end{display:none!important}
+.reader{padding:calc(12px + env(safe-area-inset-top)) 4px 40px}
+.reader-top{position:sticky;top:0;background:var(--paper);display:flex;align-items:center;gap:14px;padding:10px 0;border-bottom:1px solid var(--line);z-index:5}
+.reader-top .text-button{font-size:16px;color:var(--ink);min-height:44px;padding:0 4px}.reader-top b{font:600 14px 'PT Mono',ui-monospace,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.reader-tip{font-size:14px;color:#5f5f5d;margin:12px 0}
+.reader-lines{list-style:none;margin:0;padding:0}
+.read-line>button{display:block;width:100%;text-align:left;background:transparent;padding:12px 4px;border-radius:6px}
+.read-line b{display:block;font:700 13px 'PT Mono',ui-monospace,monospace;letter-spacing:.04em;margin-bottom:4px}
+.read-line span{font:16px/1.55 'PT Mono',ui-monospace,monospace}
+.read-line i{display:block;font-size:14px;color:#6b6b69;margin-top:4px}
+.read-line.mine span{background:var(--marker);box-shadow:0 0 0 2px var(--marker);-webkit-box-decoration-break:clone;box-decoration-break:clone}
+.read-line.hard b::after{content:' · ✱';color:#a0521d}
+.read-line.here>button{border-left:3px solid var(--ink);border-radius:0;padding-left:10px}
+.read-line.picked>button{background:#efefeb}
+.read-go{width:100%;min-height:50px;font-size:16px;border-radius:10px;margin:4px 0 12px}
+body.rehearsing #start{flex-direction:row;min-width:0}
+body.rehearsing #rehearse>.transport{gap:8px}body.rehearsing #rehearse>.transport .speech-button{min-width:0;padding:0 12px;white-space:nowrap}body.rehearsing #rehearse>.transport .icon-button{width:50px;min-width:50px}
+.read-line>button.read-go{display:flex;width:100%;text-align:center;justify-content:center;background:var(--ink);color:#fff;border-radius:10px;padding:0 18px}
+.reader-top .text-button{white-space:nowrap}
+body.rehearsing #start{gap:8px}
