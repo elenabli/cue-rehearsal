@@ -60,14 +60,14 @@ const Core = require('../dist/core.js');
   });
   assert.ok(r2.script.startsWith('CHARACTERS\nHAMLET\nGHOST\n\nScene 1'), r2.script);
   assert.ok(r2.script.includes('GHOST: Remember me. stray line'), r2.script);
-  assert.ok(r2.warnings.some(w => /not in the cast and were left out/.test(w)));
+  assert.ok(r2.warnings.some(w => /no known speaker/.test(w)));
   // Label stripping: aliases, ё/е, a label the model did not expect.
   assert.strictEqual(AI.stripLabel('Лёха. Привет', ['ЛЕХА']).rest, '. Привет');
   assert.deepStrictEqual(AI.stripLabel('КАБАН: Да', ['ЛЁХА']), { rest: ': Да', label: 'КАБАН' });
   assert.strictEqual(AI.stripLabel('Да, конечно', ['ЛЁХА']).rest, 'Да, конечно');
   const r3 = AI.toScript(['ЛЁХА. Привет.', 'КАБАН. Здорово.'], { language: 'ru', title: '', scenes: [], cast: [{ name: 'ЛЁХА', aliases: [], gender: 'm', age: 'young' }], marks: [[1, 0], [2, 0]] });
   assert.ok(r3.script.includes('ЛЁХА: Здорово.'));
-  assert.ok(r3.warnings.some(w => /КАБАН → ЛЁХА/.test(w)), r3.warnings.join('|'));
+  assert.ok(r3.warnings.some(w => /«КАБАН» was given to ЛЁХА/.test(w)), r3.warnings.join('|'));
 
   // Stream reading.
   const events = [

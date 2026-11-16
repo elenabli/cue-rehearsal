@@ -2,6 +2,7 @@
    label them (scenes, speeches, directions, cast). The play itself is then
    rebuilt here from the original lines, so no line is ever rewritten. */
 (function(root){
+  const tr=(text,vars)=>root.CueI18n?root.CueI18n.t(text,vars):String(text).replace(/\{(\w+)\}/g,(m,k)=>vars&&k in vars?vars[k]:m);
   const PRICES={'claude-haiku-5-5':[0.10,0.50],'claude-sonnet-5-5':[2,10],'claude-opus-5-5':[4,20]};// $ per million tokens, in/out
 
   // The lines that go to the model: trimmed, blank lines dropped.
@@ -9,22 +10,22 @@
 
   // Read Claude's server-sent events into one result.
   async function readStream(response,onProgress){
-    if(!response.ok){let message=`The proxy answered ${response.status}.`;try{const body=await response.json();message=body.error?.message||body.error||message;}catch{}throw Error(message);}
+    if(!response.ok){let message=tr('The AI service answered with error {status}.',{status:response.status});try{const body=await response.json();message=body.error?.message||(typeof body.error==='string'?tr(body.error):'')||message;}catch{}throw Error(message);}
     const reader=response.body.getReader(),decoder=new TextDecoder();let buffer='',text='',usage={},stopReason=null,model=null;
     const handle=data=>{
       if(!data||data==='[DONE]')return;const event=JSON.parse(data);
       if(event.type==='message_start'){model=event.message?.model||model;Object.assign(usage,event.message?.usage||{});}
       else if(event.type==='content_block_delta'&&event.delta?.type==='text_delta'){text+=event.delta.text;onProgress&&onProgress(text.length);}
       else if(event.type==='message_delta'){stopReason=event.delta?.stop_reason||stopReason;Object.assign(usage,event.usage||{});}
-      else if(event.type==='error')throw Error(event.error?.message||'The model stopped with an error.');
+      else if(event.type==='error')throw Error(event.error?.message||tr('The AI stopped with an error.'));
     };
     for(;;){const {value,done}=await reader.read();buffer+=decoder.decode(value||new Uint8Array(),{stream:!done});
       let cut;while((cut=buffer.indexOf('\n\n'))>=0){const chunk=buffer.slice(0,cut);buffer=buffer.slice(cut+2);
         handle(chunk.split('\n').filter(l=>l.startsWith('data:')).map(l=>l.slice(5).trim()).join(''));}
       if(done)break;}
-    if(stopReason==='refusal')throw Error('The model declined to read this play.');
-    if(stopReason==='max_tokens')throw Error('The play was too long for one answer.');
-    let labels;try{labels=JSON.parse(text);}catch{throw Error('The answer was not complete. Try again.');}
+    if(stopReason==='refusal')throw Error(tr('The AI declined to read this play.'));
+    if(stopReason==='max_tokens')throw Error(tr('The play was too long for one answer.'));
+    let labels;try{labels=JSON.parse(text);}catch{throw Error(tr('The answer was not complete. Try again.'));}
     return {labels,usage,stopReason,model};
   }
 
@@ -50,8 +51,8 @@
     const cast=(labels.cast||[]).map(c=>({...c,name:String(c.name||'').trim(),aliases:(c.aliases||[]).map(a=>String(a).trim()).filter(Boolean)}));
     const titles=new Map((labels.scenes||[]).map(s=>[s.line,String(s.title||'').trim()]));
     const marks=(labels.marks||[]).filter(m=>Array.isArray(m)&&m.length>=2&&Number.isInteger(m[0])&&Number.isInteger(m[1])&&m[0]>=1&&m[0]<=lines.length).sort((a,b)=>a[0]-b[0]).filter((m,i,a)=>!i||m[0]!==a[i-1][0]);
-    if(!marks.length){warnings.push('The model marked nothing.');}
-    else if(marks[0][0]>1)warnings.push(`${marks[0][0]-1} line(s) at the start were not marked and are left out.`);
+    if(!marks.length){warnings.push(tr('The AI marked nothing.'));}
+    else if(marks[0][0]>1)warnings.push(tr('{n} line(s) at the start were left out.',{n:marks[0][0]-1}));
     const out=[],scenes=[],speeches=new Map(),mismatch=new Map();let scene=null,badIndex=0;
     const startScene=title=>{const n=scenes.length+1;const heading=sceneHeading.test(title)?title:`${en?'Scene':'Сцена'} ${n}${title?'. '+title:''}`;scene={title:heading,speeches:0};scenes.push(scene);out.push('',heading);};
     marks.forEach(([from,code],i)=>{
@@ -60,18 +61,18 @@
       if(code===-3){startScene(titles.get(from)||flatten(rows[0]));return;}
       if(code===-1){if(!scene)return;const d=flatten(rows.join(' '));if(d)out.push('['+d+']');return;}
       const who=cast[code];if(!who||!who.name){badIndex++;return;}
-      const {rest,label}=stripLabel(rows[0],[who.name,...who.aliases]);if(label)mismatch.set(label+' → '+who.name,(mismatch.get(label+' → '+who.name)||0)+1);
+      const {rest,label}=stripLabel(rows[0],[who.name,...who.aliases]);if(label){const k=label+'\u0000'+who.name;mismatch.set(k,(mismatch.get(k)||0)+1);}
       // «Маша (тихо). Вот он» → «МАША: [тихо] Вот он»
       const first=rest.replace(/^\s*[:.—–-]\s*/,'').replace(/^\s*\(([^()]*)\)\s*[:.—–-]?\s*/,'[$1] ');
       const text=brackets([first,...rows.slice(1)].join(' ').replace(/\s+/g,' ').trim());
       if(!text)return;if(!scene)startScene('');
       out.push(`${who.name}: ${text}`);scene.speeches++;speeches.set(who.name,(speeches.get(who.name)||0)+1);
     });
-    if(badIndex)warnings.push(`${badIndex} speech(es) pointed at a character that is not in the cast and were left out.`);
-    for(const [pair,n] of mismatch)warnings.push(`Label differs from the chosen character: ${pair} (${n}×).`);
-    const silent=cast.filter(c=>!speeches.has(c.name));if(silent.length)warnings.push(`In the cast but never speaks: ${silent.map(c=>c.name).join(', ')}.`);
-    const once=[...speeches].filter(([,n])=>n===1).map(([s])=>s);if(once.length)warnings.push(`Speaks only once (maybe a misspelling): ${once.join(', ')}.`);
-    const notes=[];const empty=scenes.filter(s=>!s.speeches).length;if(empty)notes.push(`${empty} scene(s) without words.`);
+    if(badIndex)warnings.push(tr('{n} speech(es) had no known speaker and were left out.',{n:badIndex}));
+    for(const [k,n] of mismatch){const [label,who]=k.split('\u0000');warnings.push(tr('A speech that starts with «{label}» was given to {who} ({n}×).',{label,who,n}));}
+    const silent=cast.filter(c=>!speeches.has(c.name));if(silent.length)warnings.push(tr('In the cast but never speaks: {names}.',{names:silent.map(c=>c.name).join(', ')}));
+    const once=[...speeches].filter(([,n])=>n===1).map(([s])=>s);if(once.length)warnings.push(tr('Speaks only once (maybe a misspelling): {names}.',{names:once.join(', ')}));
+    const notes=[];const empty=scenes.filter(s=>!s.speeches).length;if(empty)notes.push(tr('{n} scene(s) without words.',{n:empty}));
     const speaking=cast.filter(c=>speeches.has(c.name));
     const script=((speaking.length?(en?'CHARACTERS':'ДЕЙСТВУЮЩИЕ ЛИЦА')+'\n'+speaking.map(c=>c.name).join('\n')+'\n':'')+out.join('\n')).trim();
     return {script,cast:speaking.map(c=>({...c,speeches:speeches.get(c.name)})),scenes,warnings,notes,title:labels.title||''};
