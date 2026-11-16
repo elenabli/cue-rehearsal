@@ -205,3 +205,8 @@ dialog::backdrop{background:#0008}
 dialog{color:var(--ink)}
 dialog h2{margin-top:6px}
 #test-voice+.auto-listen-setting{margin-top:18px}
+
+/* Hands-free black screen: looks switched off, the run goes on. */
+body.rehearsing.pocket .pocket-guard{transition:background-color .8s}
+body.rehearsing.pocket .pocket-guard.dark{background:#000}
+body.rehearsing.pocket .pocket-guard.dark span{color:#3a3a3a;border-top-color:#1c1c1c}

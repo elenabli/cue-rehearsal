@@ -48,7 +48,7 @@ Turn on **Hands-free** before you start to rehearse with the phone in your pocke
 - if you stop to remember, what you've said so far is kept. After a quiet spell (about 10 seconds) Cue says the next few words, and you carry on from there. Each further quiet spell gives a longer hint, up to the whole line; after that Cue pauses and says so;
 - a short fanfare and "Scene complete" at the end.
 
-Taps are ignored while hands-free runs, so the phone can't press buttons in your pocket. Press and hold the screen to pause. The screen stays on: if the phone locks, Safari stops listening, so leave it unlocked. Headphones such as AirPods work as microphone and speaker. On iPhone the sounds follow the silent switch, so turn silent mode off.
+Taps are ignored while hands-free runs, so the phone can't press buttons in your pocket. After a few seconds the screen turns fully black, which looks like a locked phone, but it stays awake so Cue keeps listening. Tap to see the scene again, and press and hold to pause. Don't lock the phone with the side button: iPhone freezes web pages when it locks, so the voice and mic stop. Headphones such as AirPods work as microphone and speaker. On iPhone the sounds follow the silent switch, so turn silent mode off.
 
 Without hands-free, a pause partway through a line is also thinking time: Cue keeps what you said and waits, and only checks a half line after a long silence.
 
