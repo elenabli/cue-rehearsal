@@ -28,21 +28,12 @@ const Core = require('../dist/core.js');
   const labels = {
     language: 'ru', title: 'Палец героя',
     cast: [
-      { name: 'ИВАН ПЕТРОВИЧ', aliases: ['ИВАН'], gender: 'male', age: 'adult' },
-      { name: 'МАША', aliases: ['Маша'], gender: 'female', age: 'young' },
-      { name: 'ВСЕ', aliases: [], gender: 'group', age: 'unknown' },
+      { name: 'ИВАН ПЕТРОВИЧ', aliases: ['ИВАН'], gender: 'm', age: 'adult' },
+      { name: 'МАША', aliases: [], gender: 'f', age: 'young' },
+      { name: 'ВСЕ', aliases: [], gender: 'group', age: '?' },
     ],
-    blocks: [
-      { kind: 'skip', from: 1, to: 5, speaker: '', cut: '', title: '' },
-      { kind: 'scene', from: 6, to: 6, speaker: '', cut: '', title: 'Действие первое' },
-      { kind: 'direction', from: 7, to: 7, speaker: '', cut: '', title: '' },
-      { kind: 'speech', from: 8, to: 9, speaker: 'ИВАН ПЕТРОВИЧ', cut: 'ИВАН ПЕТРОВИЧ.', title: '' },
-      { kind: 'speech', from: 10, to: 11, speaker: 'Маша', cut: 'Маша', title: '' },
-      { kind: 'speech', from: 12, to: 13, speaker: 'ИВАН', cut: 'ИВАН', title: '' },
-      { kind: 'skip', from: 14, to: 14, speaker: '', cut: '', title: '' },
-      { kind: 'scene', from: 15, to: 15, speaker: '', cut: '', title: 'Действие второе' },
-      { kind: 'speech', from: 16, to: 16, speaker: 'ВСЕ', cut: 'ВСЕ:', title: '' },
-    ],
+    scenes: [{ line: 6, title: 'Действие первое' }, { line: 15, title: 'Действие второе' }],
+    marks: [[1, -2], [6, -3], [7, -1], [8, 0], [10, 1], [12, 0], [14, -2], [15, -3], [16, 2]],
   };
   const r = AI.toScript(lines, labels);
   assert.strictEqual(r.scenes.length, 2);
@@ -62,16 +53,21 @@ const Core = require('../dist/core.js');
   assert.deepStrictEqual(r.warnings.filter(w => !/only once/.test(w)), []);
 
   // Gaps, unknown speakers and speeches before any scene heading.
-  const r2 = AI.toScript(['HAMLET: To be.', 'GHOST: Remember me.', 'stray line'], {
-    language: 'en', title: '', cast: [{ name: 'HAMLET', aliases: [], gender: 'male', age: 'young' }],
-    blocks: [
-      { kind: 'speech', from: 1, to: 1, speaker: 'HAMLET', cut: 'HAMLET:', title: '' },
-      { kind: 'speech', from: 2, to: 2, speaker: 'GHOST', cut: 'GHOST:', title: '' },
-    ],
+  const r2 = AI.toScript(['HAMLET: To be.', 'GHOST: Remember me.', 'stray line', 'HORATIO. Hush.'], {
+    language: 'en', title: '', scenes: [],
+    cast: [{ name: 'HAMLET', aliases: [], gender: 'm', age: 'young' }, { name: 'GHOST', aliases: [], gender: 'm', age: 'old' }],
+    marks: [[1, 0], [2, 1], [4, 5], [99, 0]],
   });
   assert.ok(r2.script.startsWith('CHARACTERS\nHAMLET\nGHOST\n\nScene 1'), r2.script);
-  assert.ok(r2.warnings.some(w => /not labelled/.test(w)));
-  assert.ok(r2.warnings.some(w => /GHOST speaks but was not in the cast/.test(w)));
+  assert.ok(r2.script.includes('GHOST: Remember me. stray line'), r2.script);
+  assert.ok(r2.warnings.some(w => /not in the cast and were left out/.test(w)));
+  // Label stripping: aliases, ё/е, a label the model did not expect.
+  assert.strictEqual(AI.stripLabel('Лёха. Привет', ['ЛЕХА']).rest, '. Привет');
+  assert.deepStrictEqual(AI.stripLabel('КАБАН: Да', ['ЛЁХА']), { rest: ': Да', label: 'КАБАН' });
+  assert.strictEqual(AI.stripLabel('Да, конечно', ['ЛЁХА']).rest, 'Да, конечно');
+  const r3 = AI.toScript(['ЛЁХА. Привет.', 'КАБАН. Здорово.'], { language: 'ru', title: '', scenes: [], cast: [{ name: 'ЛЁХА', aliases: [], gender: 'm', age: 'young' }], marks: [[1, 0], [2, 0]] });
+  assert.ok(r3.script.includes('ЛЁХА: Здорово.'));
+  assert.ok(r3.warnings.some(w => /КАБАН → ЛЁХА/.test(w)), r3.warnings.join('|'));
 
   // Stream reading.
   const events = [
@@ -80,7 +76,7 @@ const Core = require('../dist/core.js');
     { type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: '' } },
     { type: 'content_block_start', index: 1, content_block: { type: 'text', text: '' } },
     { type: 'content_block_delta', index: 1, delta: { type: 'text_delta', text: '{"language":"en","title":"T",' } },
-    { type: 'content_block_delta', index: 1, delta: { type: 'text_delta', text: '"cast":[],"blocks":[]}' } },
+    { type: 'content_block_delta', index: 1, delta: { type: 'text_delta', text: '"cast":[],"scenes":[],"marks":[]}' } },
     { type: 'message_delta', delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 200 } },
     { type: 'message_stop' },
   ];

@@ -11,22 +11,24 @@ const MAX_CHARS = 800000;
 
 export const SYSTEM = `You read stage plays (Russian or English) for a rehearsal app. The user message is the play's extracted text, one line per row, each row starting with its line number and "| ". Text in [square brackets] was italic in the original, usually a stage direction.
 
-Label every line from the first to the last, in order, with no gaps and no overlaps, as consecutive blocks:
-- "skip": title page, author, dedication, the list of characters, page numbers, running headers or footers, publisher notes, "THE END" / «Конец», «Занавес».
-- "scene": a heading that starts a new scene (act, scene, картина, явление, действие, a numbered part, or a place/time heading). Put the heading lines in this block and a short title in "title" as the play writes it, for example «Действие первое. Картина вторая» or "Act 1, Scene 2".
-- "direction": a stage direction outside a speech.
-- "speech": one character's speech, from the line where it starts to its last line. Put the character's name in "speaker", spelled exactly as in "cast". In "cut", copy the exact characters at the start of the first line that are the speaker's name with the punctuation right after it (for example «ИВАН ПЕТРОВИЧ.», "HAMLET:", or the whole line when the name stands on its own line); use "" if the line has no name. A direction after the name, as in «Маша (тихо). Вот он», is not part of "cut" («Маша»). A direction inside a speech stays in the speech.
+Answer with the cast and with "marks". A mark is a pair [line, code] that says what starts on that line; it lasts until the next mark. Codes:
+- 0, 1, 2 …: a speech by that character, by their position in "cast" (0 is the first). Mark the line where the speaker's name stands.
+- -1: a stage direction between speeches.
+- -2: something to leave out: title page, author, the list of characters, page numbers, running headers or footers, notes, "THE END" / «Конец», «Занавес».
+- -3: a heading that starts a new scene.
 
-Scenes: use the smallest unit the play numbers (явление or scene rather than act). If the play has no headings at all, start a new scene where the place or time changes or most characters change; use the first line of that stretch as the scene block only if it is a heading, otherwise make no scene block and the app will add one.
+Mark only where something new starts, never each line. A speech that runs over many lines, including directions inside it, gets one mark. After a direction between speeches, the next speech gets its own mark. The first mark is on line 1.
 
-Cast: every character who speaks, once, by the fullest name the play's list of characters or speech labels use (keep the play's capitals). Merge spellings of the same person («ИВАН», «Иван Петрович», «И. П.») into one name and list the others in "aliases". Give gender and a rough age from the text; use "unknown" when the text does not say. Groups who speak together («ВСЕ», "BOTH") are characters too.
+Scenes: use the smallest unit the play numbers (scene or явление rather than act). Give each scene in "scenes" as {line, title}, with the line of its -3 mark and a short title as the play writes it («Сцена 3. Квартира Гордеевых. День.», "Act 1, Scene 2"). If the play has no headings, add -3 marks where the place or time changes, on the first line of that stretch, with a short title you write.
 
-Never rewrite, correct, translate or summarise the play. Only label line numbers.`;
+Cast: every character who speaks, once, by the name their speech labels use most (keep the play's capitals). Merge spellings of one person («ИВАН», «Иван Петрович», «И. П.») and list the other spellings in "aliases". Groups who speak together («ВСЕ», "BOTH") are characters too. A word in capitals inside a speech or a direction is not a character. Gender: f, m, group or "?"; age: child, young, adult, old or "?".
+
+Never rewrite, correct, translate or summarise the play. Only point at line numbers.`;
 
 export const SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['language', 'title', 'cast', 'blocks'],
+  required: ['language', 'title', 'cast', 'scenes', 'marks'],
   properties: {
     language: { type: 'string', enum: ['ru', 'en', 'other'] },
     title: { type: 'string' },
@@ -39,27 +41,21 @@ export const SCHEMA = {
         properties: {
           name: { type: 'string' },
           aliases: { type: 'array', items: { type: 'string' } },
-          gender: { type: 'string', enum: ['female', 'male', 'group', 'unknown'] },
-          age: { type: 'string', enum: ['child', 'young', 'adult', 'old', 'unknown'] },
+          gender: { type: 'string', enum: ['f', 'm', 'group', '?'] },
+          age: { type: 'string', enum: ['child', 'young', 'adult', 'old', '?'] },
         },
       },
     },
-    blocks: {
+    scenes: {
       type: 'array',
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['kind', 'from', 'to', 'speaker', 'cut', 'title'],
-        properties: {
-          kind: { type: 'string', enum: ['skip', 'scene', 'direction', 'speech'] },
-          from: { type: 'integer' },
-          to: { type: 'integer' },
-          speaker: { type: 'string' },
-          cut: { type: 'string' },
-          title: { type: 'string' },
-        },
+        required: ['line', 'title'],
+        properties: { line: { type: 'integer' }, title: { type: 'string' } },
       },
     },
+    marks: { type: 'array', items: { type: 'array', items: { type: 'integer' } } },
   },
 };
 
@@ -96,7 +92,7 @@ export function importRequest(body) {
     max_tokens: 64000,
     stream: true,
     system: SYSTEM,
-    output_config: { effort: 'medium', format: { type: 'json_schema', schema: SCHEMA } },
+    output_config: { effort: 'low', format: { type: 'json_schema', schema: SCHEMA } },
     messages: [{ role: 'user', content: text }],
   };
   const headers = { 'content-type': 'application/json', 'anthropic-version': '2026-10-21' };

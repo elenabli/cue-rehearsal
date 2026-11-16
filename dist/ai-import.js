@@ -34,36 +34,41 @@
   const brackets=s=>s.replace(/\(([^()]*)\)/g,'[$1]');
   const sceneHeading=/^\s*(?:сцена|scene)\s*[.:]?\s*(?:№\s*|no\.?\s*)?(?:\d+|[IVXLCDM]+)(?=$|[\s.:—–-])/iu;
 
-  // Turn the model's labels into Cue's script text (Сцена/Scene headings,
+  const esc=s=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&').replace(/[её]/gi,'[её]').replace(/\s+/g,'\\s+');
+  // Remove the speaker's label from the first line of a speech: «ИВАН ПЕТРОВИЧ.», «Маша (тихо).», "HAMLET:".
+  function stripLabel(first,names){
+    for(const name of [...names].sort((a,b)=>b.length-a.length)){const m=first.match(new RegExp('^\\s*'+esc(name)+'(?=$|[\\s.:—–(-])','iu'));if(m)return {rest:first.slice(m[0].length),label:null};}
+    const m=first.match(/^\s*([\p{Lu}][\p{Lu}\p{M}\d'’ -]{1,44}?)\s*(?=[.:]|\(|$)/u);
+    if(m&&/\p{Lu}{2}/u.test(m[1]))return {rest:first.slice(m[0].length),label:m[1].trim()};
+    return {rest:first,label:null};
+  }
+
+  // Turn the model's marks into Cue's script text (Сцена/Scene headings,
   // NAME: speech, [direction]) and list anything that looks wrong.
   function toScript(lines,labels){
-    const en=labels.language==='en',warnings=[],cast=[];const names=new Map();
-    const key=s=>String(s).toLocaleLowerCase().replace(/ё/g,'е').replace(/[.:\s]+/g,' ').trim();
-    for(const c of labels.cast||[]){const name=String(c.name||'').trim();if(!name||names.has(key(name)))continue;cast.push({...c,name});names.set(key(name),name);for(const a of c.aliases||[])if(!names.has(key(a)))names.set(key(a),name);}
-    const blocks=(labels.blocks||[]).filter(b=>Number.isInteger(b.from)&&Number.isInteger(b.to)&&b.from>=1&&b.to>=b.from&&b.to<=lines.length).sort((a,b)=>a.from-b.from);
-    // Coverage: every line labelled once.
-    let next=1,gaps=0,overlaps=0;for(const b of blocks){if(b.from>next)gaps+=b.from-next;if(b.from<next)overlaps++;next=Math.max(next,b.to+1);}if(next<=lines.length)gaps+=lines.length-next+1;
-    if(gaps)warnings.push(`${gaps} line(s) were not labelled and are left out.`);if(overlaps)warnings.push(`${overlaps} block(s) overlap.`);
-    const out=[],scenes=[],speeches=new Map();let scene=null,badCuts=0,last=0;
+    const en=labels.language==='en',warnings=[];
+    const cast=(labels.cast||[]).map(c=>({...c,name:String(c.name||'').trim(),aliases:(c.aliases||[]).map(a=>String(a).trim()).filter(Boolean)}));
+    const titles=new Map((labels.scenes||[]).map(s=>[s.line,String(s.title||'').trim()]));
+    const marks=(labels.marks||[]).filter(m=>Array.isArray(m)&&m.length>=2&&Number.isInteger(m[0])&&Number.isInteger(m[1])&&m[0]>=1&&m[0]<=lines.length).sort((a,b)=>a[0]-b[0]).filter((m,i,a)=>!i||m[0]!==a[i-1][0]);
+    if(!marks.length){warnings.push('The model marked nothing.');}
+    else if(marks[0][0]>1)warnings.push(`${marks[0][0]-1} line(s) at the start were not marked and are left out.`);
+    const out=[],scenes=[],speeches=new Map(),mismatch=new Map();let scene=null,badIndex=0;
     const startScene=title=>{const n=scenes.length+1;const heading=sceneHeading.test(title)?title:`${en?'Scene':'Сцена'} ${n}${title?'. '+title:''}`;scene={title:heading,speeches:0};scenes.push(scene);out.push('',heading);};
-    for(const b of blocks){
-      const from=Math.max(b.from,last+1);if(from>b.to)continue;last=b.to;const rows=lines.slice(from-1,b.to);
-      if(b.kind==='skip')continue;
-      if(b.kind==='scene'){startScene(String(b.title||flatten(rows.join(' '))).trim());continue;}
-      if(b.kind==='direction'){if(!scene)continue;const d=flatten(rows.join(' '));if(d)out.push('['+d+']');continue;}
-      if(b.kind!=='speech')continue;
-      let speaker=names.get(key(b.speaker))||String(b.speaker||'').trim();
-      if(!speaker){warnings.push(`Line ${from}: a speech without a speaker.`);continue;}
-      if(!names.has(key(speaker))){names.set(key(speaker),speaker);cast.push({name:speaker,aliases:[],gender:'unknown',age:'unknown'});warnings.push(`${speaker} speaks but was not in the cast list.`);}
-      let first=rows[0];const cut=String(b.cut||'').trim();
-      if(cut){if(first.startsWith(cut))first=first.slice(cut.length);else if(first.toLocaleLowerCase().startsWith(cut.toLocaleLowerCase()))first=first.slice(cut.length);else badCuts++;}
+    marks.forEach(([from,code],i)=>{
+      const to=i+1<marks.length?marks[i+1][0]-1:lines.length;const rows=lines.slice(from-1,to);
+      if(code===-2)return;
+      if(code===-3){startScene(titles.get(from)||flatten(rows[0]));return;}
+      if(code===-1){if(!scene)return;const d=flatten(rows.join(' '));if(d)out.push('['+d+']');return;}
+      const who=cast[code];if(!who||!who.name){badIndex++;return;}
+      const {rest,label}=stripLabel(rows[0],[who.name,...who.aliases]);if(label)mismatch.set(label+' → '+who.name,(mismatch.get(label+' → '+who.name)||0)+1);
       // «Маша (тихо). Вот он» → «МАША: [тихо] Вот он»
-      first=first.replace(/^\s*[:.—–-]\s*/,'').replace(/^\s*\(([^()]*)\)\s*[:.—–-]?\s*/,'[$1] ');
+      const first=rest.replace(/^\s*[:.—–-]\s*/,'').replace(/^\s*\(([^()]*)\)\s*[:.—–-]?\s*/,'[$1] ');
       const text=brackets([first,...rows.slice(1)].join(' ').replace(/\s+/g,' ').trim());
-      if(!text)continue;if(!scene)startScene('');
-      out.push(`${speaker}: ${text}`);scene.speeches++;speeches.set(speaker,(speeches.get(speaker)||0)+1);
-    }
-    if(badCuts)warnings.push(`${badCuts} speech label(s) did not match the text; those lines keep the name.`);
+      if(!text)return;if(!scene)startScene('');
+      out.push(`${who.name}: ${text}`);scene.speeches++;speeches.set(who.name,(speeches.get(who.name)||0)+1);
+    });
+    if(badIndex)warnings.push(`${badIndex} speech(es) pointed at a character that is not in the cast and were left out.`);
+    for(const [pair,n] of mismatch)warnings.push(`Label differs from the chosen character: ${pair} (${n}×).`);
     const silent=cast.filter(c=>!speeches.has(c.name));if(silent.length)warnings.push(`In the cast but never speaks: ${silent.map(c=>c.name).join(', ')}.`);
     const once=[...speeches].filter(([,n])=>n===1).map(([s])=>s);if(once.length)warnings.push(`Speaks only once (maybe a misspelling): ${once.join(', ')}.`);
     const empty=scenes.filter(s=>!s.speeches).length;if(empty)warnings.push(`${empty} scene(s) have no speech.`);
@@ -79,5 +84,5 @@
     return {...result,...toScript(lines,result.labels),seconds:(Date.now()-started)/1000,cost:cost(result.usage,result.model),lines:lines.length};
   }
 
-  const api={playLines,readStream,toScript,cost,smartImport,PRICES};root.CueAI=api;if(typeof module!=='undefined')module.exports=api;
+  const api={playLines,readStream,toScript,stripLabel,cost,smartImport,PRICES};root.CueAI=api;if(typeof module!=='undefined')module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);
