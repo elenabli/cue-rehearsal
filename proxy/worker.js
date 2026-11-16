@@ -18,7 +18,9 @@ Answer with the cast and with "marks". A mark is a pair [line, code] that says w
 - -2: something to leave out: title page, author, the list of characters, page numbers, running headers or footers, notes, "THE END" / «Конец», «Занавес».
 - -3: a heading that starts a new scene.
 
-Mark only where something new starts, never each line. A speech that runs over many lines, including directions inside it, gets one mark. After a direction between speeches, the next speech gets its own mark. The first mark is on line 1.
+Mark only where something new starts, never each line. A speech that runs over many lines, including directions inside it, gets one mark. After a direction between speeches, the next speech gets its own mark. The first mark is on the first line you are given.
+
+A long play comes in parts that are read separately. A part says so above its lines. It may begin or end in the middle of a scene: start a scene at its first line only if a heading stands there. The title page and the list of characters may be in another part; list the characters who speak in this part, named as the play's speech labels name them.
 
 Scenes: use the smallest unit the play numbers (scene or явление rather than act). Give each scene in "scenes" as {line, title}, with the line of its -3 mark and a short title as the play writes it («Сцена 3. Квартира Гордеевых. День.», "Act 1, Scene 2"). If the play has no headings, add -3 marks where the place or time changes, on the first line of that stretch, with a short title you write.
 
@@ -86,7 +88,13 @@ export function importRequest(body) {
   const lines = body && body.lines;
   if (!Array.isArray(lines) || !lines.length || lines.some(l => typeof l !== 'string')) throw new Error('Send the play as a list of lines.');
   if (lines.length > MAX_LINES) throw new Error(`The play is too long (${lines.length} lines, at most ${MAX_LINES}).`);
-  const text = lines.map((l, i) => `${i + 1}| ${l.replace(/\s+/g, ' ').trim()}`).join('\n');
+  const start = Number.isInteger(body.start) && body.start > 0 ? body.start : 1;
+  let text = lines.map((l, i) => `${start + i}| ${l.replace(/\s+/g, ' ').trim()}`).join('\n');
+  if (Number.isInteger(body.of) && body.of > 1) {
+    const names = Array.isArray(body.names) ? body.names.filter(n => typeof n === 'string').slice(0, 80).map(n => n.slice(0, 60)) : [];
+    text = `Part ${Number(body.part) || 1} of ${body.of}, lines ${start}–${start + lines.length - 1}.` +
+      (names.length ? ` Speech labels found in the whole play: ${names.join(', ')}.` : '') + '\n\n' + text;
+  }
   if (text.length > MAX_CHARS) throw new Error('The play is too long to read in one go.');
   const request = {
     model,

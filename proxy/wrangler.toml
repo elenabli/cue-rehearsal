@@ -6,9 +6,10 @@ workers_dev = true
 [vars]
 # Pages allowed to call the proxy (comma-separated).
 ALLOWED_ORIGINS = "https://elenabli.github.io,http://localhost:4173,http://127.0.0.1:4173"
-# Imports allowed per day without an invite code: in total, and per address.
-DAILY_LIMIT = "20"
-PER_IP_LIMIT = "5"
+# Requests allowed per day without an invite code: in total, and per address.
+# A long play is read in up to 6 parts, one request each (about 5 plays per address).
+DAILY_LIMIT = "120"
+PER_IP_LIMIT = "30"
 
 [[durable_objects.bindings]]
 name = "COUNTER"
