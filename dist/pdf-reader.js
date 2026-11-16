@@ -28,7 +28,8 @@
    byId('script-input').value=r.script;byId('cast-input').value=r.cast.map(c=>c.name).join('\n');byId('title-input').value=name;byId('script-message').textContent='';
    const found=t('AI found {s} scenes and {c} characters.',{s:r.scenes.length,c:r.cast.length});
    const review=byId('pdf-review');review.hidden=false;
-   if(r.warnings.length)review.innerHTML=found+' '+t('Please check:')+listHtml(r.warnings);else review.textContent=found+' '+t('Look it over, then choose Save and rehearse.');
+   const notes=(r.notes||[]).join(' ');
+   if(r.warnings.length)review.innerHTML=found+' '+t('Please check:')+listHtml(r.warnings)+(notes?'<p>'+notes.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))+'</p>':'');else review.textContent=found+(notes?' '+notes:'')+' '+t('Look it over, then choose Save and rehearse.');
    status(t('Read with AI in {s} s.',{s:secs()}));return {ok:true};
   }catch(error){return {ok:false,reason:error.message};}
   finally{clearInterval(tick);}

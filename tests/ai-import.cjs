@@ -69,6 +69,39 @@ const Core = require('../dist/core.js');
   assert.ok(r3.script.includes('ЛЁХА: Здорово.'));
   assert.ok(r3.warnings.some(w => /«КАБАН» was given to ЛЁХА/.test(w)), r3.warnings.join('|'));
 
+  // Characters the AI missed: the text's labels add them and split the speeches.
+  const missed = AI.toScript([
+    'СЦЕНА 1.', 'ЛЁХА. Привет.', 'КАБАН. Здорово.', 'ЛЁХА. Как дела?', 'КАБАН (смеётся). Нормально.', 'ЩУПЛЫЙ: А я?', 'НЕТ. Это не имя.',
+  ], { language: 'ru', title: '', scenes: [{ line: 1, title: 'СЦЕНА 1.' }],
+    cast: [{ name: 'ЛЁХА', aliases: [], gender: 'm', age: 'adult' }],
+    marks: [[1, -3], [2, 0], [4, 0]] });
+  assert.deepStrictEqual(missed.cast.map(c => c.name), ['ЛЁХА', 'КАБАН']);
+  assert.ok(missed.script.includes('КАБАН: Здорово.'), missed.script);
+  assert.ok(missed.script.includes('КАБАН: [смеётся] Нормально. ЩУПЛЫЙ: А я? НЕТ. Это не имя.'), missed.script);
+  assert.ok(missed.notes.some(n => /КАБАН/.test(n)));
+  assert.strictEqual(AI.lineLabel('ЩУПЛЫЙ: А я?'), 'ЩУПЛЫЙ');
+  assert.strictEqual(AI.lineLabel('ВОЕНКОМ ГОРОДА ТУЖА'), 'ВОЕНКОМ ГОРОДА ТУЖА');
+  assert.strictEqual(AI.lineLabel('СССР развалился.'), null);
+  assert.strictEqual(AI.lineLabel('Маша. Привет'), null);
+
+  // Parts: cuts fall on scene headings or speech labels; answers merge into one cast.
+  const long = [];
+  for (let s = 1; s <= 6; s++) { long.push(`СЦЕНА ${s}.`); for (let i = 0; i < 40; i++) long.push(i % 2 ? `МАША. Реплика ${s}-${i} ` + 'слово '.repeat(20) : `ИВАН. Ответ ${s}-${i} ` + 'слово '.repeat(20)); long.push('(Уходят.)'); }
+  const parts = AI.splitParts(long);
+  assert.ok(parts.length >= 2 && parts.length <= 6, String(parts.length));
+  assert.strictEqual(parts.map(p => p.lines.length).reduce((a, b) => a + b), long.length);
+  for (const p of parts.slice(1)) assert.ok(/^СЦЕНА/.test(p.lines[0]) || AI.lineLabel(p.lines[0]), p.lines[0]);
+  assert.strictEqual(parts[1].start, parts[0].lines.length + 1);
+  assert.strictEqual(AI.splitParts(['A: hi']).length, 1);
+  const merged = AI.mergeLabels([
+    { labels: { language: 'ru', title: 'П', cast: [{ name: 'ИВАН', aliases: ['ВАНЯ'], gender: 'm', age: 'adult' }, { name: 'МАША', aliases: [], gender: 'f', age: '?' }], scenes: [{ line: 1, title: 'A' }], marks: [[1, -3], [2, 0], [3, 1]] } },
+    { labels: { language: 'ru', title: '', cast: [{ name: 'Маша', aliases: [], gender: '?', age: 'young' }, { name: 'ВАНЯ', aliases: [], gender: 'm', age: '?' }, { name: 'КАБАН', aliases: [], gender: 'm', age: '?' }], scenes: [{ line: 4, title: 'B' }], marks: [[4, -3], [5, 0], [6, 1], [7, 2], [8, 7]] } },
+  ]);
+  assert.deepStrictEqual(merged.cast.map(c => c.name), ['ИВАН', 'МАША', 'КАБАН']);
+  assert.strictEqual(merged.cast[1].age, 'young');
+  assert.deepStrictEqual(merged.marks, [[1, -3], [2, 0], [3, 1], [4, -3], [5, 1], [6, 0], [7, 2]]);
+  assert.strictEqual(merged.scenes.length, 2);
+
   // Stream reading.
   const events = [
     { type: 'message_start', message: { model: 'claude-sonnet-5-5', usage: { input_tokens: 1000, output_tokens: 1 } } },
@@ -98,6 +131,8 @@ const Core = require('../dist/core.js');
   assert.strictEqual(built.request.messages[0].content, '1| A\n2| B c');
   assert.strictEqual(built.request.fallbacks, 'default');
   assert.strictEqual(built.headers['anthropic-beta'], 'server-side-fallback-2026-07-01');
+  const part = worker.importRequest({ lines: ['A', 'B'], start: 101, part: 2, of: 3, names: ['ИВАН', 'МАША'] });
+  assert.strictEqual(part.request.messages[0].content, 'Part 2 of 3, lines 101–102. Speech labels found in the whole play: ИВАН, МАША.\n\n101| A\n102| B');
   const haiku = worker.importRequest({ model: 'haiku', lines: ['A'] });
   assert.ok(!('fallbacks' in haiku.request) && !haiku.headers['anthropic-beta']);
   assert.strictEqual(worker.importRequest({ model: 'gpt', lines: ['A'] }).request.model, 'claude-sonnet-5-5');

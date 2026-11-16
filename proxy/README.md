@@ -1,11 +1,11 @@
 # Cue proxy
 
-A small Cloudflare Worker that holds Cue's AI keys, so the app (a static site on GitHub Pages) never sees them. It does only Cue's own jobs. Anyone using Cue may import up to `PER_IP_LIMIT` plays a day, with `DAILY_LIMIT` imports a day in total (see `wrangler.toml`); an invite code skips both. It stores no plays, only today's counts.
+A small Cloudflare Worker that holds Cue's AI keys, so the app (a static site on GitHub Pages) never sees them. It does only Cue's own jobs. Anyone using Cue may send up to `PER_IP_LIMIT` requests a day, with `DAILY_LIMIT` a day in total (see `wrangler.toml`); a long play is read in up to 6 parts at once, one request each, so 30 is about 5 plays; an invite code skips both. It stores no plays, only today's counts.
 
 | Path | What it does |
 | --- | --- |
 | `GET /ping` | Checks whether the Anthropic key is set |
-| `POST /import` | `{model: "haiku"\|"sonnet"\|"opus", lines: [...]}` → Claude labels each line (scene, speech, direction, skip) and lists the cast; the answer streams back to the app, which rebuilds the play from its own lines (`dist/ai-import.js`) |
+| `POST /import` | `{model: "haiku"\|"sonnet"\|"opus", lines: [...], start?, part?, of?, names?}` → Claude labels each line (scene, speech, direction, skip) and lists the cast; the answer streams back to the app, which rebuilds the play from its own lines (`dist/ai-import.js`) |
 
 ## Setup (once)
 
