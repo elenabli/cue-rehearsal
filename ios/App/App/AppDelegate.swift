@@ -1,5 +1,6 @@
 import UIKit
 import Capacitor
+import WebKit
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -46,4 +47,17 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         return ApplicationDelegateProxy.shared.application(application, continue: userActivity, restorationHandler: restorationHandler)
     }
 
+}
+
+/// Cue's web view keeps running while the app is in the background (screen locked during a scene).
+/// By default iOS suspends an inactive web view; with the audio background mode the app itself stays alive,
+/// and this keeps the page's JavaScript (the rehearsal logic) running too. iOS 17 or later.
+class CueViewController: CAPBridgeViewController {
+    override func webViewConfiguration(for instanceConfiguration: InstanceConfiguration) -> WKWebViewConfiguration {
+        let configuration = super.webViewConfiguration(for: instanceConfiguration)
+        if #available(iOS 17.0, *) {
+            configuration.preferences.inactiveSchedulingPolicy = .none
+        }
+        return configuration
+    }
 }

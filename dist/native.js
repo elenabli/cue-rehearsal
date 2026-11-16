@@ -28,13 +28,14 @@
   }
   Cue.addListener('recognition',e=>{const s=sessions.get(e.id);if(s)s._event(e);});
 
-  class NativeUtterance{constructor(text=''){this.text=text;this.lang='';this.rate=1;this.voice=null;this.onend=this.onerror=null;}}
+  class NativeUtterance{constructor(text=''){this.text=text;this.lang='';this.rate=1;this.volume=1;this.voice=null;this.onend=this.onerror=null;}}
   let voices=[];const voiceListeners=[];
   const synthesis={
     get speaking(){return utterances.size>0;},
     getVoices(){return voices;},
     addEventListener(type,fn){if(type==='voiceschanged')voiceListeners.push(fn);},
-    speak(u){const id='u'+(++seq);utterances.set(id,u);Cue.speak({id,text:u.text,lang:u.lang,rate:Number(u.rate)||1,voice:u.voice?u.voice.voiceURI:''}).catch(()=>{if(utterances.delete(id))u.onerror?.({error:'synthesis-failed'});});},
+    speak(u){if(u.volume===0){setTimeout(()=>{u.onstart?.call(u,{});u.onend?.call(u,{});},0);return;}// a silent «unlock» utterance is a Safari workaround; the app needs none
+    const id='u'+(++seq);utterances.set(id,u);Cue.speak({id,text:u.text,lang:u.lang,rate:Number(u.rate)||1,voice:u.voice?u.voice.voiceURI:''}).catch(()=>{if(utterances.delete(id))u.onerror?.({error:'synthesis-failed'});});},
     cancel(){utterances.clear();Cue.cancelSpeech().catch(()=>{});}
   };
   Cue.addListener('speech',e=>{const u=utterances.get(e.id);if(!u)return;utterances.delete(e.id);(e.type==='end'?u.onend:u.onerror)?.call(u,{});});
@@ -46,5 +47,10 @@
   root.SpeechRecognition=NativeRecognition;root.webkitSpeechRecognition=NativeRecognition;root.SpeechSynthesisUtterance=NativeUtterance;
   try{Object.defineProperty(root,'speechSynthesis',{value:synthesis,configurable:true});}catch{}
   try{Object.defineProperty(root.navigator,'wakeLock',{value:wakeLock,configurable:true});}catch{}
-  root.CueNative=true;
+  // Lock screen: Cue keeps the scene running in the background while a run is on (audio background mode),
+  // and tells the page when the screen locks so it can switch hands-free on.
+  let runOn=null;const native={background:true,setRun(on){on=!!on;if(on===runOn)return;runOn=on;pageLog('run '+(on?'on':'off'));Cue.setRunActive({on}).catch(()=>{});}};
+  Cue.addListener('lifecycle',e=>{pageLog('lifecycle '+e.type);if((e.type==='locked'||e.type==='background')&&root.dispatchEvent&&root.CustomEvent)root.dispatchEvent(new root.CustomEvent('cue-native-lock',{detail:e.type}));});
+  root.document?.documentElement?.classList.add('standalone');
+  root.CueNative=native;
 })(typeof window!=='undefined'?window:globalThis);

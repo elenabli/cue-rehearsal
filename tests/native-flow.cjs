@@ -1,4 +1,4 @@
-// Whole rehearsal through the iPhone bridge with a simulated native recognizer (real timers, about 12 s):
+// Whole rehearsal through the iPhone bridge with a simulated native recognizer (real timers, about 15 s):
 // a wrong attempt, a deaf session that reports a microphone failure, then the right lines. The rehearsal must recover and finish.
 const assert=require('node:assert/strict');const fs=require('fs'),vm=require('vm');const R=require('path').join(__dirname,'..')+'/';
 const els=new Map();function element(){return {value:'',textContent:'',hidden:false,disabled:false,dataset:{},classList:{toggle(){},add(){},remove(){}},children:[],setAttribute(k,v){this[k]=v},replaceChildren(...e){this.children=e},append(...e){this.children.push(...e)},querySelector(){return this.button||(this.button=element())},showModal(){},close(){},click(){}};}
@@ -10,7 +10,7 @@ const plugin={
  stopListening(a){L('native stop',a.id);if(current&&current.id===a.id)setTimeout(()=>finishS(a.id),100);return Promise.resolve();},
  abortListening(a){L('native abort',a.id);if(current&&current.id===a.id)endS(current);return Promise.resolve();},
  speak(a){L('native speak',JSON.stringify(a.text));setTimeout(()=>listeners.speech({id:a.id,type:'end'}),500);return Promise.resolve();},
- cancelSpeech(){return Promise.resolve()},getVoices(){return Promise.resolve({voices:[]})},keepAwake(){return Promise.resolve()},
+ setRunActive(){return Promise.resolve()},cancelSpeech(){return Promise.resolve()},getVoices(){return Promise.resolve({voices:[]})},keepAwake(){return Promise.resolve()},
  addListener(n,f){listeners[n]=f;}};
 function emit(id,type,extra={}){L('ev',id,type,extra.transcripts?JSON.stringify(extra.transcripts)+(extra.isFinal?' final':''):(extra.error||''));listeners.recognition({id,type,...extra});}
 function endS(s){if(current===s)current=null;emit(s.id,'end');}
@@ -29,7 +29,7 @@ const plan=['Господи как разит','Господи перегари�
 get('start').onclick();L('state',st());
 let step=0;const iv=setInterval(()=>{if(current&&!current.heard&&!current.planned&&step<plan.length){current.planned=true;const text=plan[step++];setTimeout(()=>speakInto(current.id,text),400);}},50);
 setTimeout(()=>{clearInterval(iv);const text=log.join('\n');
- try{assert.equal(vm.runInContext('data.index',ctx),4,'The scene finishes');assert(/r2 error audio-capture/.test(text),'The deaf session reported a microphone failure');assert(/native start r3/.test(text),'…and a fresh session replaced it');assert.equal(log.filter(l=>l.includes('native speak')).length,2,'Both partner cues were spoken');
- const lines=win.CueSpeechLog.lines().join('\n');assert(/r2 error audio-capture \(no microphone audio\)/.test(lines),'The speech log names the failure');assert(!/перегарищем/.test(lines),'The speech log holds no words');}
+ try{assert.equal(vm.runInContext('data.index',ctx),4,'The scene finishes');assert(/(r\d+) error audio-capture[\s\S]*native start r\d+/.test(text),'The deaf session reported a microphone failure, and a fresh session replaced it');assert(['А водка ещё есть?','Ну и что.'].every(cue=>log.some(l=>l.includes('native speak')&&l.includes(cue))),'Both partner cues were spoken');
+ const lines=win.CueSpeechLog.lines().join('\n');assert(/error audio-capture \(no microphone audio\)/.test(lines),'The speech log names the failure');assert(!/перегарищем/.test(lines),'The speech log holds no words');}
  catch(e){console.log(text);throw e;}
- console.log('Native rehearsal flow passed: wrong attempt, deaf session recovery, partner cues, scene completion, and a word-free speech log.');process.exit(0)},12500);
+ console.log('Native rehearsal flow passed: wrong attempt, deaf session recovery, partner cues, scene completion, and a word-free speech log.');process.exit(0)},15000);

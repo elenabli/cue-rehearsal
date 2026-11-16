@@ -28,7 +28,8 @@ public class CueSpeechPlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizerDe
         CAPPluginMethod(name: "cancelSpeech", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getVoices", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "keepAwake", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "getLog", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "getLog", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setRunActive", returnType: CAPPluginReturnPromise)
     ]
 
     /// One listening session. Lives until Apple's task has really finished, not just until the page is told "end".
@@ -60,6 +61,12 @@ public class CueSpeechPlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizerDe
     private var drainTimer: Timer?
     private var noAudioTimer: Timer?
     private var logLines: [String] = []
+    /// While a scene runs, the microphone input stays on between lines and a silent loop plays, so iOS keeps
+    /// Cue running with the screen locked (audio background mode). Only the current session gets the audio.
+    private var runActive = false
+    private var keepAlive: AVAudioPlayer?
+    private let tapLock = NSLock()
+    private var tapTarget: Session?
     private let started = Date()
 
     /// How long a pause ends the line, once some words have been heard.
@@ -77,6 +84,12 @@ public class CueSpeechPlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizerDe
                                                name: AVAudioSession.interruptionNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(routeChanged(_:)),
                                                name: AVAudioSession.routeChangeNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(engineConfigurationChanged(_:)),
+                                               name: .AVAudioEngineConfigurationChange, object: engine)
+        let center = NotificationCenter.default
+        center.addObserver(forName: UIApplication.protectedDataWillBecomeUnavailableNotification, object: nil, queue: .main) { [weak self] _ in self?.lifecycle("locked") }
+        center.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { [weak self] _ in self?.lifecycle("background") }
+        center.addObserver(forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main) { [weak self] _ in self?.lifecycle("foreground") }
         log("loaded, iOS \(UIDevice.current.systemVersion)")
     }
 
@@ -105,6 +118,63 @@ public class CueSpeechPlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizerDe
             self.log("audio interruption \(type == .began ? "began" : "ended")")
             if type == .began { self.audioActive = false }
             if type == .began, let s = self.session { self.fail(s, "audio-capture", "interrupted") }
+            if type == .ended, self.runActive { _ = self.activateAudio(); self.keepAlive?.play() }
+        }
+    }
+
+    private func lifecycle(_ type: String) {
+        log("app \(type)\(runActive ? " (scene running)" : "")")
+        notifyListeners("lifecycle", data: ["type": type])
+    }
+
+    /// A new route (headphones in or out) stops the engine and changes the input format: start the input again.
+    @objc private func engineConfigurationChanged(_ note: Notification) {
+        DispatchQueue.main.async {
+            self.log("audio engine configuration changed")
+            if self.tapInstalled { self.engine.inputNode.removeTap(onBus: 0); self.tapInstalled = false }
+            if let s = self.session { self.fail(s, "audio-capture", "audio route changed") }
+            else if self.runActive { _ = self.startInput() }
+        }
+    }
+
+    // MARK: Scene running (lock screen)
+
+    @objc func setRunActive(_ call: CAPPluginCall) {
+        let on = call.getBool("on") ?? false
+        call.resolve()
+        DispatchQueue.main.async {
+            guard on != self.runActive else { return }
+            self.runActive = on
+            self.log("run \(on ? "on" : "off")")
+            if on {
+                _ = self.activateAudio()
+                self.startKeepAlive()
+            } else {
+                self.keepAlive?.stop(); self.keepAlive = nil
+                if self.session == nil { self.stopEngine() }
+            }
+        }
+    }
+
+    /// One second of silence, looped, so the audio session counts as playing while nothing else does.
+    private func startKeepAlive() {
+        if keepAlive?.isPlaying == true { return }
+        let rate: UInt32 = 8000, samples: UInt32 = 8000, bytes = samples * 2
+        var wav = Data()
+        func u32(_ v: UInt32) { var x = v.littleEndian; wav.append(Data(bytes: &x, count: 4)) }
+        func u16(_ v: UInt16) { var x = v.littleEndian; wav.append(Data(bytes: &x, count: 2)) }
+        wav.append("RIFF".data(using: .ascii)!); u32(36 + bytes); wav.append("WAVE".data(using: .ascii)!)
+        wav.append("fmt ".data(using: .ascii)!); u32(16); u16(1); u16(1); u32(rate); u32(rate * 2); u16(2); u16(16)
+        wav.append("data".data(using: .ascii)!); u32(bytes); wav.append(Data(count: Int(bytes)))
+        do {
+            let player = try AVAudioPlayer(data: wav)
+            player.numberOfLoops = -1
+            player.volume = 0
+            player.play()
+            keepAlive = player
+            log("keep-alive playing")
+        } catch {
+            log("keep-alive failed: \(describe(error))")
         }
     }
 
@@ -230,29 +300,8 @@ public class CueSpeechPlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizerDe
         let s = Session(id: id, request: request)
         session = s
 
-        let input = engine.inputNode
-        if tapInstalled { input.removeTap(onBus: 0); tapInstalled = false }
-        let format = input.outputFormat(forBus: 0)
-        log("\(id) input format \(Int(format.sampleRate)) Hz, \(format.channelCount) ch")
-        guard format.sampleRate > 0, format.channelCount > 0 else {
-            fail(s, "audio-capture", "no input format"); return
-        }
-        input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self, weak s] buffer, _ in
-            guard let s = s else { return }
-            s.request.append(buffer)
-            var peak: Float = 0
-            if let data = buffer.floatChannelData?[0] {
-                for i in stride(from: 0, to: Int(buffer.frameLength), by: 8) { peak = max(peak, abs(data[i])) }
-            }
-            DispatchQueue.main.async { self?.audioArrived(s, peak: peak) }
-        }
-        tapInstalled = true
-        do {
-            engine.prepare()
-            try engine.start()
-        } catch {
-            fail(s, "audio-capture", describe(error)); return
-        }
+        guard startInput() else { fail(s, "audio-capture", "microphone input did not start"); return }
+        setTapTarget(s)
 
         s.task = recognizer.recognitionTask(with: request) { [weak self, weak s] result, error in
             DispatchQueue.main.async {
@@ -268,6 +317,42 @@ public class CueSpeechPlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizerDe
             guard let self = self, let s = s, self.session === s, !s.gotAudio else { return }
             self.log("\(s.id) no microphone audio after 2 s")
             self.fail(s, "audio-capture", "no microphone audio")
+        }
+    }
+
+    private func setTapTarget(_ s: Session?) {
+        tapLock.lock(); tapTarget = s; tapLock.unlock()
+    }
+
+    /// Start the microphone input (once). The tap hands audio only to the current session.
+    private func startInput() -> Bool {
+        if tapInstalled && engine.isRunning { return true }
+        let input = engine.inputNode
+        if tapInstalled { input.removeTap(onBus: 0); tapInstalled = false }
+        let format = input.outputFormat(forBus: 0)
+        log("input format \(Int(format.sampleRate)) Hz, \(format.channelCount) ch")
+        guard format.sampleRate > 0, format.channelCount > 0 else { log("no input format"); return false }
+        input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
+            guard let self = self else { return }
+            self.tapLock.lock(); let target = self.tapTarget; self.tapLock.unlock()
+            guard let s = target else { return }
+            s.request.append(buffer)
+            var peak: Float = 0
+            if let data = buffer.floatChannelData?[0] {
+                for i in stride(from: 0, to: Int(buffer.frameLength), by: 8) { peak = max(peak, abs(data[i])) }
+            }
+            DispatchQueue.main.async { self.audioArrived(s, peak: peak) }
+        }
+        tapInstalled = true
+        do {
+            engine.prepare()
+            try engine.start()
+            log("input running")
+            return true
+        } catch {
+            log("input start failed: \(describe(error))")
+            input.removeTap(onBus: 0); tapInstalled = false
+            return false
         }
     }
 
@@ -351,9 +436,14 @@ public class CueSpeechPlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizerDe
         }
     }
 
+    /// The session stops getting audio. While a scene runs the input itself stays on (that keeps Cue alive
+    /// with the screen locked, and a mic can't always be started again from the background).
     private func stopEngine() {
+        setTapTarget(nil)
+        if runActive && engine.isRunning { return }
         if tapInstalled { engine.inputNode.removeTap(onBus: 0); tapInstalled = false }
         if engine.isRunning { engine.stop() }
+        log("input stopped")
     }
 
     /// Tell the page the session is over (once) and, if its task is still running, keep it as `draining`

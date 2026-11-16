@@ -96,7 +96,7 @@ function render(){const scene=data.scenes[data.activeScene],needsReview=scene.ki
 // Keep the screen on while rehearsing: the page pauses itself when hidden,
 // so iPhone auto-lock would otherwise end a hands-free run.
 let wakeLock=null,wakeLockPending=false;
-function syncWakeLock(){const want=running&&!document.hidden;if(want&&!wakeLock&&!wakeLockPending&&navigator.wakeLock){wakeLockPending=true;navigator.wakeLock.request('screen').then(lock=>{wakeLockPending=false;if(!running){lock.release().catch(()=>{});return;}wakeLock=lock;lock.addEventListener('release',()=>{if(wakeLock===lock)wakeLock=null;});}).catch(()=>{wakeLockPending=false;});}else if(!want&&wakeLock){const lock=wakeLock;wakeLock=null;lock.release().catch(()=>{});}}
+function syncWakeLock(){window.CueNative?.setRun?.(running);const want=running&&!document.hidden;if(want&&!wakeLock&&!wakeLockPending&&navigator.wakeLock){wakeLockPending=true;navigator.wakeLock.request('screen').then(lock=>{wakeLockPending=false;if(!running){lock.release().catch(()=>{});return;}wakeLock=lock;lock.addEventListener('release',()=>{if(wakeLock===lock)wakeLock=null;});}).catch(()=>{wakeLockPending=false;});}else if(!want&&wakeLock){const lock=wakeLock;wakeLock=null;lock.release().catch(()=>{});}}
 // Hands-free mode while running: a guard ignores stray taps in the pocket (press and hold pauses).
 let pocketScreen=false;function syncPocket(){const want=running&&!!Pocket()&&!document.hidden;document.body.classList[want?'add':'remove']('pocket');if(want!==pocketScreen){pocketScreen=want;window.CuePocket?.screen(want);}}
 // iPhone, outside hands-free: hands-free runs kept going because a tone (or a spoken hint) plays between the partner's voice and the mic, which keeps Safari's audio and mic awake. Play the same tones softly here.
@@ -211,7 +211,10 @@ function listen(automatic=false,pinged=false){
  if(recognition){if(automatic){slog('listen skipped (already listening)');return;}slog('tap: stop the old session, then start again');const old=recognition;recognition=null;old.onresult=old.onerror=null;old.onend=()=>{if(lastSession&&lastSession.rec===old)lastSession.ended=true;};try{old.stop();}catch{}document.body.classList.remove('listening');clearTimeout(retryTimer);startWhenFree(()=>listen(false));return;}
  deafRetries=automatic?deafRetries:0;
  if(!running&&!automatic)running=true;
- clearTimeout(retryTimer);voiceAudio(false);const rec=new Recognition();recognition=rec;const session={rec,ended:false};lastSession=session;const sid=++sessionCount;slog('#'+sid+' start ('+(automatic?'auto':'tap')+'), line '+(data.index+1));rec.onsoundstart=()=>slog('#'+sid+' onsoundstart');rec.onspeechstart=()=>slog('#'+sid+' onspeechstart');rec.lang=data.language;rec.interimResults=true;rec.continuous=false;rec.maxAlternatives=5;
+ clearTimeout(retryTimer);voiceAudio(false);const rec=new Recognition();recognition=rec;const session={rec,ended:false};
+ // The iPhone app's recognizer can be told which words to expect, which helps with rare forms («перегарищем»).
+ if('phrases' in rec&&lines[data.index]){const words=lines[data.index].text.split(/\s+/).map(w=>w.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu,'')).filter(Boolean);rec.phrases=[...new Set([lines[data.index].text,...words])];}
+lastSession=session;const sid=++sessionCount;slog('#'+sid+' start ('+(automatic?'auto':'tap')+'), line '+(data.index+1));rec.onsoundstart=()=>slog('#'+sid+' onsoundstart');rec.onspeechstart=()=>slog('#'+sid+' onspeechstart');rec.lang=data.language;rec.interimResults=true;rec.continuous=false;rec.maxAlternatives=5;
  const token=runId,lineIndex=data.index;heard={key:'',count:0,missed:[]};let finals=[],interim='',failed=false,retryAllowed=true,ended=false,watchdog=null,audio=false,deaf=false,capture=false;
  const candidatesFor=rows=>{let combined=[partialSpeech],fresh=[''];for(const row of rows){combined=combined.flatMap(prefix=>row.map(text=>(prefix+' '+text).trim())).slice(0,25);fresh=fresh.flatMap(prefix=>row.map(text=>(prefix+' '+text).trim())).slice(0,25);}return [...new Set(partialSpeech?[...combined,...fresh]:combined)];};
  // iOS Safari can keep a session open without ever reporting results, which left the mic on but deaf. Stop a quiet session, and drop it if it won't stop.
@@ -255,7 +258,7 @@ function listen(automatic=false,pinged=false){
 }
 
 slog('page loaded'+((window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches)||navigator.standalone?' from the Home Screen':' in a browser tab')+': '+navigator.userAgent);document.addEventListener('visibilitychange',()=>slog('page '+document.visibilityState));window.addEventListener('pagehide',()=>slog('page hidden/closed'));
-$('copy-speech-log').onclick=async()=>{const text=speechLog.join('\n')||'(empty)';let ok=false;try{await navigator.clipboard.writeText(text);ok=true;}catch{}if(!ok){const area=$('speech-log-text');area.hidden=false;area.value=text;area.select();}$('speech-log-message').textContent=t(ok?'Copied. Paste it in your message to Claude.':'Select the text below and copy it.');};
+$('copy-speech-log').onclick=async()=>{const text=[...speechLog,...(window.CueSpeechLog?['--- iPhone app ---',...window.CueSpeechLog.lines()]:[])].join('\n')||'(empty)';let ok=false;try{await navigator.clipboard.writeText(text);ok=true;}catch{}if(!ok){const area=$('speech-log-text');area.hidden=false;area.value=text;area.select();}$('speech-log-message').textContent=t(ok?'Copied. Paste it in your message to Claude.':'Select the text below and copy it.');};
 $('clear-speech-log').onclick=()=>{speechLog=[];try{localStorage.removeItem('cue-speech-log');}catch{}$('speech-log-text').hidden=true;$('speech-log-message').textContent=t('Log cleared.');};
 $('start').onclick=()=>{slog('Start tapped');if(!startingDrill)drill=null;startingDrill=false;reading=false;if(['directions','review'].includes(data.scenes[data.activeScene].kind)){selectScene(data.activeScene+1);return;}if(running){pause();return;}stopAudio();if(data.pocket||softTones())window.CuePocket?.unlock();if(data.index>=lines.length)data.index=0;running=true;feedback();render();window.scrollTo(0,0);holdAudioSession();askForMic(playCurrent);unlockVoice();};
 $('listen').onclick=()=>{listen(false);unlockVoice();};
@@ -325,7 +328,10 @@ function openHelp(){pause();$('help').showModal();}document.querySelectorAll('.h
 let installPrompt=null;// Chrome may show its own install bar too; the event is kept for the buttons.
 window.addEventListener('beforeinstallprompt',e=>{installPrompt=e;});window.addEventListener('appinstalled',()=>{installPrompt=null;slog('installed as an app');});
 document.querySelectorAll('.install-help').forEach(el=>el.onclick=()=>{if(!installPrompt){openHelp();return;}pause();const p=installPrompt;installPrompt=null;p.prompt();p.userChoice?.then(c=>slog('install: '+c.outcome)).catch(()=>{});});document.querySelectorAll('.dialog-close,.dialog-done').forEach(el=>el.onclick=()=>$('help').close());
-document.addEventListener('visibilitychange',()=>{if(document.hidden)pause();});window.addEventListener('pagehide',pause);
+// In the iPhone app a locked screen doesn't stop the scene: hands-free turns on and the run goes on (see native.js).
+const keepRunningHidden=()=>!!(window.CueNative&&window.CueNative.background&&running);
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&!keepRunningHidden())pause();});window.addEventListener('pagehide',()=>{if(!keepRunningHidden())pause();});
+window.addEventListener('cue-native-lock',e=>{slog('app '+(e.detail||'locked')+(running?', scene running':''));if(running&&!data.pocket){data.pocket=true;slog('hands-free on (screen locked)');persist();render();}});
 $('title-input').value=data.title;$('script-input').value=data.playText;$('cast-input').value=data.cast.join('\n');
 $('add-play').onclick=()=>{pause();setAdding(true);$('adding-note').scrollIntoView?.({behavior:'smooth',block:'start'});};$('cancel-add').onclick=()=>setAdding(false);$('change-play').onclick=()=>showView('script');
 // Backup: one file with every play, role, progress and setting; restoring replaces what is on this device.

@@ -10,6 +10,7 @@ You need a Mac with Xcode, Node.js (https://nodejs.org, LTS), your iPhone, and a
    ```
    git clone https://github.com/elenabli/cue-rehearsal.git
    cd cue-rehearsal
+   git checkout claude/native-lock-screen
    npm install
    npm run ios
    ```
@@ -23,7 +24,11 @@ You need a Mac with Xcode, Node.js (https://nodejs.org, LTS), your iPhone, and a
 6. **Trust the developer on the phone** the first time: **Settings → General → VPN & Device Management →** your Apple ID **→ Trust**. Then open Cue.
 7. When Cue first listens, allow **Microphone** and **Speech Recognition**.
 
-Your play and progress live inside the app, separate from Safari. Import the PDF again in the app.
+Your plays and progress live inside the app, separate from Safari. To bring them over, save a backup in Safari (**Script → Backup → Save a backup**), then restore it in the app (**Script → Backup → Restore a backup**).
+
+## Locked screen
+
+In the app a scene keeps running when you lock the phone (iOS 17 or later). Locking it, or switching to another app, turns **Hands-free** on, so sounds and spoken hints take over. The orange microphone dot stays on while a scene runs; it goes off when the scene ends or you pause. Unlock and press and hold the screen to pause.
 
 ## Every 7 days (free Apple ID)
 
@@ -33,6 +38,7 @@ Apps signed with a free Apple ID stop opening after 7 days. Connect the phone, o
 
 ```
 cd cue-rehearsal
+git checkout claude/native-lock-screen
 git pull
 npm install
 npm run ios

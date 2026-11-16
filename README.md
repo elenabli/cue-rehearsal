@@ -95,4 +95,4 @@ Mozilla PDF.js is bundled in `dist/vendor/pdfjs/`, together with its Apache-2.0 
 
 ## iPhone app
 
-On iPhone, Safari's speech recognition stops hearing after the first attempt. The native iPhone app in `ios/` uses Apple's own speech recognizer and voice instead, with the same screens. See [docs/IOS.md](docs/IOS.md) to install it with Xcode.
+On iPhone, Safari's speech recognition stops hearing after the first attempt. The native iPhone app in `ios/` uses Apple's own speech recognizer and voice instead, with the same screens. In the app a scene keeps going with the screen locked, and locking the phone turns hands-free on. See [docs/IOS.md](docs/IOS.md) to install it with Xcode.
