@@ -27,7 +27,7 @@ For access from an iPhone or another device, serve `dist/` from an HTTPS static 
 ## Rehearse a play
 
 1. Open Cue in Safari on iPhone or Chrome on Android. To install it, choose **Share → Add to Home Screen** on iPhone, or **⋮ → Install app** on Android.
-2. Open **Script** (**My script** on a computer) and upload the entire play as a text-based PDF or a Word `.docx` file, including the cast list. Files can be up to 25 MB. You can also import a UTF-8 `.txt` file or paste text. Older Word `.doc` files need to be saved as `.docx` or PDF first.
+2. Open **Script** and upload the entire play as a text-based PDF or a Word `.docx` file, including the cast list. Files can be up to 25 MB. You can also import a UTF-8 `.txt` file or paste text. Older Word `.doc` files need to be saved as `.docx` or PDF first.
    Scenes split at headings such as «Сцена 1». Plays that number scenes on their own line («( 4 A )», «12.») or head them with an all-caps place («ДОМ СЕМЬИ ЭЙСКОНЕН») get «Сцена …» headings added, which you can edit before saving. Foreign phrases with a Russian transcription («Tyst! [Тюст!]») are checked against the transcription.
 3. Extract the play, then review the dialogue and **Characters**. Put one character name on each line in that field.
 4. Save the play and select your character under **I’m playing**. The scene list shows the scenes you speak in, with your line count and a tick for each scene you have finished; scenes without you are folded away below. Tap a scene to choose it.
@@ -36,6 +36,8 @@ For access from an iPhone or another device, serve `dist/` from an HTTPS static 
 **Read** (next to Start) shows the scene as a page with your lines marked; tap any line and choose **Start from here**. While rehearsing, **↶** goes back one line.
 
 If the browser requires a tap to start listening, use **Speak**. If listening seems stuck, tap **Speak** again to start over. If the mic can’t hear you, turn on **Settings → If listening fails → Type my lines instead of speaking** to check lines by typing. The screen stays on while a rehearsal is running. Rehearsal settings let you choose the language and voice, adjust the partner’s pace, hide your lines, or turn automatic microphone activation off.
+
+On the first visit Home shows one card: **Add my play** opens Script, **Try a demo scene** keeps the short demo. Cue follows the phone's light or dark setting; the yellow marker stays the same in both. Opening Cue shows a short launch screen with the word “cue” and the marker sweep (iPhone Home Screen launch images live in `dist/splash/`).
 
 ## Hands-free (phone in your pocket)
 
