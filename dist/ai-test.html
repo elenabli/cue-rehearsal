@@ -65,7 +65,7 @@ function showResult(body,r){
   const sceneRows=r.scenes.map(s=>`<li>${esc(s.title)} <span class="muted">(${s.speeches})</span></li>`).join('');
   body.innerHTML=`<p>${r.model?esc(r.model)+' · ':''}${r.seconds!=null?r.seconds.toFixed(0)+' s · ':''}${r.usage?`${(r.usage.input_tokens||0).toLocaleString()} in / ${(r.usage.output_tokens||0).toLocaleString()} out · `:''}${r.cost!=null?'$'+r.cost.toFixed(3):''}</p>
   <p><b>${r.scenes.length}</b> scenes, <b>${r.cast.length}</b> speaking characters, <b>${r.cast.reduce((a,c)=>a+c.speeches,0)}</b> speeches</p>
-  ${r.warnings.length?`<ul class="warn">${r.warnings.map(w=>`<li>${esc(w)}</li>`).join('')}</ul>`:'<p>No warnings.</p>'}
+  ${r.warnings.length?`<ul class="warn">${r.warnings.map(w=>`<li>${esc(w)}</li>`).join('')}</ul>`:'<p>No warnings.</p>'}${(r.notes||[]).map(n=>`<p class="muted">${esc(n)}</p>`).join('')}
   <details><summary>Characters</summary><table>${castRows}</table></details>
   <details><summary>Scenes</summary><ol>${sceneRows}</ol></details>
   <details><summary>Script as Cue would import it</summary><textarea readonly>${esc(r.script)}</textarea></details>`;
