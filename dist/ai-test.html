@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Smart import test</title>
+<style>
+  :root{--bg:#fff;--fg:#111;--muted:#666;--card:#f4f4f2;--warn:#8a4b00;--line:#ddd}
+  @media (prefers-color-scheme:dark){:root{--bg:#141414;--fg:#eee;--muted:#aaa;--card:#222;--warn:#f0b35a;--line:#333}}
+  body{font:16px/1.45 -apple-system,system-ui,sans-serif;margin:0 auto;padding:16px;max-width:1100px;background:var(--bg);color:var(--fg)}
+  label{display:block;margin:10px 0 4px;font-weight:600}
+  input[type=text],input[type=password]{font:inherit;width:100%;max-width:520px;padding:8px;box-sizing:border-box}
+  button{font:inherit;padding:10px 18px;margin:12px 8px 0 0}
+  .muted{color:var(--muted);font-size:14px}
+  .models label{display:inline-block;font-weight:400;margin-right:16px}
+  #results{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-top:16px}
+  .card{background:var(--card);border-radius:10px;padding:12px;overflow:hidden}
+  .card h2{font-size:17px;margin:0 0 6px}
+  .warn{color:var(--warn)}
+  table{border-collapse:collapse;width:100%;font-size:14px}
+  td{padding:2px 4px;border-top:1px solid var(--line);vertical-align:top}
+  textarea{width:100%;height:240px;font:12px/1.4 ui-monospace,monospace;box-sizing:border-box}
+  ul{padding-left:18px;margin:4px 0}
+</style>
+</head>
+<body>
+<h1>Smart import test</h1>
+<p class="muted">Compares how three Claude models split a play into scenes and characters, next to today's rules. The play's text goes to your Cue proxy and on to Anthropic; nothing is saved there. Your plays in the app are not changed.</p>
+
+<label for="proxy">Proxy address</label>
+<input type="text" id="proxy" placeholder="https://cue-proxy.your-name.workers.dev" autocomplete="off">
+<label for="code">Invite code</label>
+<input type="password" id="code" autocomplete="off">
+<label for="file">Play (PDF, Word .docx or .txt)</label>
+<input type="file" id="file" accept=".pdf,.docx,.txt,application/pdf">
+<div class="models"><label><input type="checkbox" value="haiku" checked> Haiku 5.5</label><label><input type="checkbox" value="sonnet" checked> Sonnet 5.5</label><label><input type="checkbox" value="opus" checked> Opus 5.5</label></div>
+<button id="run">Read the play</button><button id="check">Check the proxy</button>
+<p id="status" class="muted"></p>
+<div id="results"></div>
+
+<script src="./pdf-import.js"></script>
+<script src="./docx-import.js"></script>
+<script src="./ai-import.js"></script>
+<script>
+const $=id=>document.getElementById(id);
+const store={get:k=>{try{return localStorage.getItem(k)||''}catch{return ''}},set:(k,v)=>{try{localStorage.setItem(k,v)}catch{}}};
+$('proxy').value=store.get('cue-ai-proxy');$('code').value=store.get('cue-ai-code');
+const save=()=>{store.set('cue-ai-proxy',$('proxy').value.trim());store.set('cue-ai-code',$('code').value.trim());};
+const status=m=>{$('status').textContent=m;};
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+async function readFile(file){
+  if(/\.docx$/i.test(file.name))return CueDocx.docxToText(new Uint8Array(await file.arrayBuffer()));
+  if(/\.txt$/i.test(file.name))return file.text();
+  const lib=await import('./vendor/pdfjs/pdf.mjs');lib.GlobalWorkerOptions.workerSrc=new URL('./vendor/pdfjs/pdf.worker.mjs',document.baseURI).href;
+  const pdf=await lib.getDocument({data:new Uint8Array(await file.arrayBuffer()),cMapUrl:new URL('./vendor/pdfjs/cmaps/',document.baseURI).href,cMapPacked:true,standardFontDataUrl:new URL('./vendor/pdfjs/standard_fonts/',document.baseURI).href,wasmUrl:new URL('./vendor/pdfjs/wasm/',document.baseURI).href,fontExtraProperties:true,isEvalSupported:false}).promise;
+  const pages=[];for(let p=1;p<=pdf.numPages;p++){status(`Reading page ${p} of ${pdf.numPages}…`);const page=await pdf.getPage(p);pages.push(await CuePdf.extractPageText(page));page.cleanup();}
+  return pages.join('\n');
+}
+
+function card(title){const el=document.createElement('div');el.className='card';el.innerHTML=`<h2>${esc(title)}</h2><div class="body">Waiting…</div>`;$('results').append(el);return el.querySelector('.body');}
+
+function showResult(body,r){
+  const castRows=r.cast.map(c=>`<tr><td>${esc(c.name)}${c.aliases&&c.aliases.length?`<br><span class="muted">${esc(c.aliases.join(', '))}</span>`:''}</td><td>${esc(c.gender||'')}${c.age&&c.age!=='unknown'?', '+esc(c.age):''}</td><td>${c.speeches}</td></tr>`).join('');
+  const sceneRows=r.scenes.map(s=>`<li>${esc(s.title)} <span class="muted">(${s.speeches})</span></li>`).join('');
+  body.innerHTML=`<p>${r.model?esc(r.model)+' · ':''}${r.seconds!=null?r.seconds.toFixed(0)+' s · ':''}${r.usage?`${(r.usage.input_tokens||0).toLocaleString()} in / ${(r.usage.output_tokens||0).toLocaleString()} out · `:''}${r.cost!=null?'$'+r.cost.toFixed(3):''}</p>
+  <p><b>${r.scenes.length}</b> scenes, <b>${r.cast.length}</b> speaking characters, <b>${r.cast.reduce((a,c)=>a+c.speeches,0)}</b> speeches</p>
+  ${r.warnings.length?`<ul class="warn">${r.warnings.map(w=>`<li>${esc(w)}</li>`).join('')}</ul>`:'<p>No warnings.</p>'}
+  <details><summary>Characters</summary><table>${castRows}</table></details>
+  <details><summary>Scenes</summary><ol>${sceneRows}</ol></details>
+  <details><summary>Script as Cue would import it</summary><textarea readonly>${esc(r.script)}</textarea></details>`;
+}
+
+function rulesResult(text){
+  const script=CuePdf.preparePlayText(text),cast=CuePdf.extractCast(script),split=CuePdf.splitPlayScenes(script);const counts=new Map();
+  const scenes=(split.scenes.length?split.scenes:[{title:'(one scene)',script}]).map(s=>{let n=0;for(const row of s.script.split('\n')){const m=row.match(/^([^:\[\]]{1,60}):/);if(m){n++;counts.set(m[1].trim(),(counts.get(m[1].trim())||0)+1);}}return {title:s.title,speeches:n};});
+  return {script,scenes,cast:[...counts].map(([name,speeches])=>({name,speeches,aliases:[]})),warnings:cast.length?[]:['No character list found.']};
+}
+
+$('check').onclick=async()=>{save();status('Checking…');
+  try{const r=await fetch($('proxy').value.trim().replace(/\/+$/,'')+'/ping',{headers:{'x-cue-code':$('code').value.trim()}});const b=await r.json();status(r.ok?(b.import?'The proxy works and has the Anthropic key.':'The proxy works but has no Anthropic key yet.'):(b.error||`Error ${r.status}`));}
+  catch(e){status('Could not reach the proxy: '+e.message);}
+};
+
+$('run').onclick=async()=>{
+  save();const file=$('file').files[0];if(!file){status('Choose a play first.');return;}
+  const models=[...document.querySelectorAll('.models input:checked')].map(i=>i.value);
+  $('results').innerHTML='';$('run').disabled=true;
+  try{
+    const text=await readFile(file);const lines=CueAI.playLines(text);status(`${file.name}: ${lines.length} lines, ${text.length.toLocaleString()} characters.`);
+    showResult(card("Today's rules"),rulesResult(text));
+    // One model at a time: new API accounts have low per-minute limits.
+    for(const model of models){const body=card(model[0].toUpperCase()+model.slice(1)+' 5.5');body.textContent='Reading…';
+      try{const r=await CueAI.smartImport({proxy:$('proxy').value.trim(),code:$('code').value.trim(),model,text,onProgress:n=>{body.textContent=`Reading… ${n.toLocaleString()} characters of answer`;}});showResult(body,r);}
+      catch(e){body.innerHTML=`<p class="warn">${esc(e.message)}</p>`;}
+    }
+  }catch(e){status(e.message);}
+  finally{$('run').disabled=false;}
+};
+</script>
+</body>
+</html>

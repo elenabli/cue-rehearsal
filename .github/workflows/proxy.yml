@@ -1,0 +1,29 @@
+name: Deploy the AI proxy
+
+# Publishes proxy/ as a Cloudflare Worker and hands it the keys stored in
+# this repository's secrets. Runs when proxy/ changes on main, or by hand.
+on:
+  push:
+    branches: [main]
+    paths: ['proxy/**', '.github/workflows/proxy.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: proxy
+          secrets: |
+            ANTHROPIC_API_KEY
+            INVITE_CODES
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          INVITE_CODES: ${{ secrets.INVITE_CODES }}

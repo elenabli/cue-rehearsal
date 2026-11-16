@@ -1,0 +1,12 @@
+name = "cue-proxy"
+main = "worker.js"
+compatibility_date = "2026-11-01"
+workers_dev = true
+
+[vars]
+# Pages allowed to call the proxy (comma-separated).
+ALLOWED_ORIGINS = "https://elenabli.github.io,http://localhost:4173,http://127.0.0.1:4173"
+
+# Secrets (set by .github/workflows/proxy.yml from the repository's secrets):
+#   ANTHROPIC_API_KEY  key from console.anthropic.com
+#   INVITE_CODES       comma-separated codes that may use the proxy
