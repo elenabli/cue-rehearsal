@@ -348,6 +348,8 @@
   'Keep the mic open for the whole scene':'Держать микрофон открытым всю сцену',
   'On by default on iPhone, where opening the mic for every line makes Safari stop hearing and silences the partner. What the mic hears while your partner speaks is ignored.':'На iPhone включено по умолчанию: если открывать микрофон на каждую реплику, Safari перестаёт слышать и голос партнёра пропадает. Что микрофон слышит, пока говорит партнёр, не учитывается.',
   'Off by default: the mic opens fresh for each of your lines. Try this only if listening stops between lines. On iPhone the partner’s voice can stop an open mic from hearing.':'По умолчанию выключено: микрофон открывается заново на каждую вашу реплику. Включайте, только если прослушивание обрывается между репликами. На iPhone голос партнёра может «оглушить» открытый микрофон.',
+  'Soft sounds between the voice and the mic':'Тихие сигналы между голосом и микрофоном',
+  'A quiet ping when the mic opens and when you get a line right. It keeps the iPhone’s voice and mic awake, as in hands-free mode.':'Тихий сигнал, когда включается микрофон и когда реплика верна. Так голос и микрофон iPhone не засыпают, как в режиме «Без рук».',
   'Play the partner’s voice at full volume':'Голос партнёра на полной громкости',
   'Switches the iPhone audio to media playback while your partner speaks, so the voice isn’t quiet after the mic was on. Turn it off if the mic stops hearing you.':'Пока говорит партнёр, iPhone переключает звук в режим воспроизведения, чтобы голос не становился тихим после микрофона. Выключите, если микрофон перестал вас слышать.',
   'Keep the mic alive while the partner speaks (experimental)':'Не отключать микрофон, пока говорит партнёр (эксперимент)',
