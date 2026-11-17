@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "test": "node tests/rehearsal.cjs && node tests/retry.cjs && node tests/thinking.cjs && node tests/pocket.cjs && node tests/pdf-import.cjs && node tests/docx-import.cjs && node tests/i18n.cjs && node tests/android.cjs && node tests/own-scene.cjs && node tests/plays.cjs && node tests/step4.cjs && node tests/loud-voice.cjs && node tests/soft-tones.cjs && node tests/ai-import.cjs && node tests/numbers.cjs && node tests/voices.cjs",
+    "test": "node tests/rehearsal.cjs && node tests/retry.cjs && node tests/thinking.cjs && node tests/pocket.cjs && node tests/pdf-import.cjs && node tests/docx-import.cjs && node tests/i18n.cjs && node tests/android.cjs && node tests/own-scene.cjs && node tests/plays.cjs && node tests/step4.cjs && node tests/loud-voice.cjs && node tests/soft-tones.cjs && node tests/ai-import.cjs && node tests/numbers.cjs && node tests/voices.cjs && node tests/voice-text.cjs",
     "start": "python3 -m http.server 4173 --directory dist"
   }
 }
