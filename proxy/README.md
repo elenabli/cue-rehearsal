@@ -5,6 +5,8 @@ A small Cloudflare Worker that holds Cue's AI keys, so the app (a static site on
 | Path | What it does |
 | --- | --- |
 | `GET /ping` | Checks whether the Anthropic key is set |
+| `GET /voices?lang=ru-RU` | The Google voices for a language: `{voices: [{name, gender}]}` |
+| `POST /speak` | `{voice, text}` → one partner line as MP3, made by Google Cloud Text-to-Speech. Counts letters per day (`VOICE_PER_IP_CHARS`, `VOICE_DAILY_CHARS`); the app keeps each line on the phone, so it is made only once |
 | `POST /import` | `{model: "haiku"\|"sonnet"\|"opus", lines: [...], start?, part?, of?, names?}` → Claude labels each line (scene, speech, direction, skip) and lists the cast; the answer streams back to the app, which rebuilds the play from its own lines (`dist/ai-import.js`) |
 
 ## Setup (once)
@@ -15,6 +17,7 @@ A small Cloudflare Worker that holds Cue's AI keys, so the app (a static site on
    - `CLOUDFLARE_API_TOKEN`: the token from step 2
    - `CLOUDFLARE_ACCOUNT_ID`: the account ID from step 2
    - `ANTHROPIC_API_KEY`: the key from step 1
+   - `GOOGLE_TTS_KEY`: a Google Cloud key limited to Cloud Text-to-Speech (for character voices; optional)
    - `INVITE_CODES`: any word you make up, for example `curtain-call` (several codes: separate with commas). A code skips the daily limits.
 4. **Deploy.** Actions → **Deploy the AI proxy** → Run workflow (it also runs by itself when `proxy/` changes on main). The log of the "Deploy" step shows the address, like `https://cue-proxy.your-name.workers.dev`.
 5. **Try it.** Open `https://elenabli.github.io/cue-rehearsal/ai-test.html`, paste the address and your invite code, press **Check the proxy**, then choose a play and **Read the play**.

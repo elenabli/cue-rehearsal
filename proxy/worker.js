@@ -1,6 +1,6 @@
 // Cue proxy: a small Cloudflare Worker that holds the AI keys so the app
 // (a static site on GitHub Pages) never sees them. It only does Cue's own
-// jobs (reading a play), never general chat. Anyone may use it within a daily
+// jobs (reading a play, speaking partner lines), never general chat. Anyone may use it within a daily
 // limit (DAILY_LIMIT in total, PER_IP_LIMIT per address); an invite code skips
 // the limits. Plays are passed through and forgotten; only counts are kept.
 
@@ -116,28 +116,52 @@ export function importRequest(body) {
 export class DailyCounter {
   constructor(state) { this.state = state; }
   async fetch(request) {
-    const { day, ip, total, perIp } = await request.json();
-    const [all, mine] = await Promise.all([this.state.storage.get('all:' + day), this.state.storage.get('ip:' + day + ':' + ip)]);
+    const { day, ip, total, perIp, kind = '', amount = 1 } = await request.json();
+    const allKey = kind + 'all:' + day, ipKey = kind + 'ip:' + day + ':' + ip;
+    const [all, mine] = await Promise.all([this.state.storage.get(allKey), this.state.storage.get(ipKey)]);
     if ((all || 0) >= total) return Response.json({ ok: false, reason: 'day' });
     if ((mine || 0) >= perIp) return Response.json({ ok: false, reason: 'ip' });
-    await this.state.storage.put({ ['all:' + day]: (all || 0) + 1, ['ip:' + day + ':' + ip]: (mine || 0) + 1 });
+    await this.state.storage.put({ [allKey]: (all || 0) + amount, [ipKey]: (mine || 0) + amount });
     // Forget earlier days.
     const keys = [...(await this.state.storage.list({ limit: 1000 })).keys()].filter(k => !k.includes(':' + day));
     if (keys.length) await this.state.storage.delete(keys.slice(0, 128));
-    return Response.json({ ok: true, left: total - (all || 0) - 1 });
+    return Response.json({ ok: true, left: total - (all || 0) - amount });
   }
 }
 
 // Returns null when allowed, or a message when today's limit is used up.
-export async function takeQuota(request, env) {
+export async function takeQuota(request, env, voice = 0) {
   if (validCode(request.headers.get('x-cue-code'), env)) return null;
   if (!env.COUNTER) return null;
   const day = new Date().toISOString().slice(0, 10);
   const ip = request.headers.get('cf-connecting-ip') || 'unknown';
   const stub = env.COUNTER.get(env.COUNTER.idFromName('imports'));
-  const r = await (await stub.fetch('https://counter/take', { method: 'POST', body: JSON.stringify({ day, ip, total: Number(env.DAILY_LIMIT) || 20, perIp: Number(env.PER_IP_LIMIT) || 5 }) })).json();
+  const limits = voice
+    ? { kind: 'tts', amount: voice, total: Number(env.VOICE_DAILY_CHARS) || 300000, perIp: Number(env.VOICE_PER_IP_CHARS) || 100000 }
+    : { total: Number(env.DAILY_LIMIT) || 20, perIp: Number(env.PER_IP_LIMIT) || 5 };
+  const r = await (await stub.fetch('https://counter/take', { method: 'POST', body: JSON.stringify({ day, ip, ...limits }) })).json();
   if (r.ok) return null;
+  if (voice) return r.reason === 'ip' ? 'Character voices are used up for today. The phone voice reads the rest.' : 'Character voices are busy today. The phone voice reads the rest.';
   return r.reason === 'ip' ? 'You have read the most plays allowed today. Try again tomorrow.' : 'Smart import is busy today. Try again tomorrow.';
+}
+
+// Character voices (Google Cloud Text-to-Speech). Exported for tests.
+const VOICE_NAME = /^[a-z]{2,3}-[A-Z]{2}-[A-Za-z0-9-]{1,40}$/;
+export function speakRequest(body) {
+  const voice = body && body.voice, text = body && typeof body.text === 'string' ? body.text.replace(/\s+/g, ' ').trim() : '';
+  if (typeof voice !== 'string' || !VOICE_NAME.test(voice)) throw new Error('Unknown voice.');
+  if (!text) throw new Error('Nothing to say.');
+  if (text.length > 1500) throw new Error('The line is too long.');
+  return {
+    input: { text },
+    voice: { languageCode: voice.split('-').slice(0, 2).join('-'), name: voice },
+    audioConfig: { audioEncoding: 'MP3' },
+  };
+}
+function fromBase64(b64) {
+  const bin = atob(b64), out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
 }
 
 export default {
@@ -146,7 +170,42 @@ export default {
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers });
     const url = new URL(request.url);
     if (url.pathname === '/ping' && request.method === 'GET') {
-      return json({ ok: true, import: !!env.ANTHROPIC_API_KEY }, 200, headers);
+      return json({ ok: true, import: !!env.ANTHROPIC_API_KEY, voices: !!env.GOOGLE_TTS_KEY }, 200, headers);
+    }
+
+    if (url.pathname === '/voices' && request.method === 'GET') {
+      if (!env.GOOGLE_TTS_KEY) return json({ error: 'The proxy has no voice key yet.' }, 503, headers);
+      const lang = url.searchParams.get('lang') || '';
+      if (!/^[a-z]{2,3}-[A-Z]{2}$/.test(lang)) return json({ error: 'Unknown language.' }, 400, headers);
+      const r = await fetch(`https://texttospeech.googleapis.com/v1/voices?languageCode=${lang}`, { headers: { 'x-goog-api-key': env.GOOGLE_TTS_KEY } });
+      if (!r.ok) return json({ error: `The voice service answered with error ${r.status}.` }, 502, headers);
+      const body = await r.json();
+      const voices = (body.voices || []).filter(v => (v.languageCodes || []).includes(lang)).map(v => ({ name: v.name, gender: v.ssmlGender }));
+      return json({ voices }, 200, { ...headers, 'cache-control': 'public, max-age=86400' });
+    }
+
+    if (url.pathname === '/speak' && request.method === 'POST') {
+      if (!env.GOOGLE_TTS_KEY) return json({ error: 'The proxy has no voice key yet.' }, 503, headers);
+      let built;
+      try {
+        built = speakRequest(await request.json());
+      } catch (error) {
+        return json({ error: error.message || 'Bad request.' }, 400, headers);
+      }
+      const limited = await takeQuota(request, env, built.input.text.length);
+      if (limited) return json({ error: limited }, 429, headers);
+      const r = await fetch('https://texttospeech.googleapis.com/v1/text:synthesize', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-goog-api-key': env.GOOGLE_TTS_KEY },
+        body: JSON.stringify(built),
+      });
+      if (!r.ok) {
+        let message = `The voice service answered with error ${r.status}.`;
+        try { message = (await r.json()).error.message || message; } catch {}
+        return json({ error: message }, 502, headers);
+      }
+      const { audioContent } = await r.json();
+      return new Response(fromBase64(audioContent), { status: 200, headers: { ...headers, 'content-type': 'audio/mpeg', 'cache-control': 'no-store' } });
     }
 
     if (url.pathname === '/import' && request.method === 'POST') {

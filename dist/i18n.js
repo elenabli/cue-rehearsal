@@ -292,6 +292,8 @@
   'Reading your Word file…':'Читаю файл Word…',
   'No text was found in this Word file. Choose another file.':'В этом файле Word нет текста. Выберите другой файл.',
   'Read uploaded plays with AI':'Читать загруженные пьесы с помощью ИИ',
+  'A natural voice for each character':'Свой естественный голос для каждого персонажа',
+  'Partner lines are made into speech by Google once, when you open a scene, and kept on this phone. Without internet, the voice above reads them.':'Реплики партнёров озвучиваются Google один раз, когда вы открываете сцену, и хранятся на этом телефоне. Без интернета их читает голос выше.',
   'Claude splits each play you upload into scenes and characters. The play’s text is sent once for this. Turn off to keep plays on this phone only.':'Claude делит каждую загруженную пьесу на сцены и персонажей. Для этого текст пьесы отправляется один раз. Выключите, чтобы пьесы не покидали этот телефон.',
   'You have read the most plays allowed today. Try again tomorrow.':'Сегодня вы уже прочитали максимум пьес. Попробуйте завтра.',
   'Smart import is busy today. Try again tomorrow.':'Умный импорт сегодня перегружен. Попробуйте завтра.',
