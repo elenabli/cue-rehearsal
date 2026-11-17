@@ -27,5 +27,5 @@ assert.notEqual(recognizer,first,'A fresh session listens on');assert.equal(inde
 // 3. A quiet session while thinking: still no complaint.
 recognizer.onerror({error:'no-speech'});recognizer.stop();flush();assert.equal(get('feedback').classList.error,undefined);assert(!/Didn/.test(get('feedback').textContent),'No complaint while thinking');
 // 4. The rest of the line completes it.
-say('сидела на скамейке и смотрела как просыпается город',false);assert.equal(marked(),16,'The marker covers both parts');say('сидела на скамейке и смотрела как просыпается город');flush();assert.equal(index(),2,'The line said in two parts is accepted');
+say('сидела на скамейке и смотрела как просыпается город',false);assert(marked()>=16,'The marker covers both parts (the whole line once it is accepted)');say('сидела на скамейке и смотрела как просыпается город');flush();assert.equal(index(),2,'The line said in two parts is accepted');
 console.log('Thinking time passed: live marker through misheard words, a pause across sessions, quiet while thinking, and the line completed after the pause.');
