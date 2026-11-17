@@ -5,9 +5,14 @@
 (function(root){
   const PROXY='https://cue-proxy.elena-blinova.workers.dev';
   const CACHE='cue-voices-v1',LIST_DAYS=7,MAX_CLIP=1400,PARALLEL=3;
-  // A few voices first, so small casts get clearly different ones; the rest follow in the service's order.
-  const FEMALE=['Aoede','Kore','Leda','Zephyr','Callirrhoe','Despina','Erinome','Laomedeia','Autonoe','Achernar','Gacrux','Pulcherrima','Sulafat','Vindemiatrix'];
-  const MALE=['Charon','Puck','Orus','Fenrir','Iapetus','Algieba','Enceladus','Schedar','Umbriel','Alnilam','Rasalgethi','Sadaltager','Achird','Algenib','Sadachbia','Zubenelgenubi'];
+  // Chirp 3 HD voices by how old they sound (Google describes them as youthful, bright, mature, gravelly…).
+  // Voices not listed here (or other voice types) count as adult.
+  const VOICE_AGE={
+    f:{young:['Leda','Zephyr','Autonoe','Laomedeia','Pulcherrima'],adult:['Aoede','Kore','Callirrhoe','Despina','Erinome'],old:['Gacrux','Sulafat','Vindemiatrix','Achernar']},
+    m:{young:['Puck','Fenrir','Sadachbia','Achird','Zubenelgenubi'],adult:['Charon','Orus','Iapetus','Alnilam','Algieba','Enceladus','Umbriel'],old:['Algenib','Rasalgethi','Sadaltager','Schedar']},
+  };
+  // Children's lines play a little higher and old people's a little lower and slower (pitch follows speed).
+  const TUNE={child:1.08,old:0.96};
   const store={get:k=>{try{return localStorage.getItem(k);}catch{return null;}},set:(k,v)=>{try{localStorage.setItem(k,v);}catch{}}};
   const code=()=>(store.get('cue-ai-code')||'').trim();
   const on=()=>store.get('cue-voices-off')!=='1';
@@ -15,22 +20,36 @@
   const ready=new Map(),pending=new Map();
   const log=m=>{try{root.CueVoiceLog?.(m);}catch{}};
 
-  // Russian patronymics say the gender when the play's reader didn't.
+  // Russian patronymics and words like БАБУШКА say the gender when the play's reader didn't.
   function genderOf(name,info){
     const g=info&&info[name]&&info[name].gender;if(g==='f'||g==='m'||g==='group')return g;
-    if(/(?:ВНА|ИЧНА)$/iu.test(name.trim()))return 'f';if(/(?:ВИЧ|ИЧ)$/iu.test(name.trim()))return 'm';return '?';
+    const n=name.trim().toUpperCase();if(/(?:ВНА|ИЧНА)$|БАБУШК|БАБКА|СТАРУХ|ДЕВОЧК|ВНУЧК|ЖЕНЩИН|GRAND(?:MA|MOTHER)|\b(?:GIRL|WOMAN|MOTHER|MRS)\b/u.test(n))return 'f';
+    if(/(?:ВИЧ|ИЧ)$|ДЕДУШК|(?<!\p{L})ДЕД(?!\p{L})|СТАРИК|МАЛЬЧИК|ВНУК(?!\p{L})|МУЖЧИН|GRAND(?:PA|FATHER)|\b(?:BOY|MAN|FATHER|MR)\b/u.test(n))return 'm';return '?';
+  }
+  // Age from the play's reader; otherwise from words like БАБУШКА or BOY in the name.
+  function ageOf(name,info){
+    const a=info&&info[name]&&info[name].age;if(['child','young','adult','old'].includes(a))return a;
+    const n=String(name).toUpperCase().replace(/Ё/g,'Е');
+    if(/БАБУШК|БАБКА|ДЕДУШК|\bДЕД\b|СТАРИК|СТАРУХ|GRAND(?:MA|PA|MOTHER|FATHER)|OLD /u.test(n))return 'old';
+    if(/МАЛЬЧИК|ДЕВОЧК|РЕБЕНОК|ВНУК|ВНУЧК|\bBOY\b|\bGIRL\b|CHILD/u.test(n))return 'child';
+    return '?';
   }
   const short=v=>v.name.split('-').pop();
-  // One voice per character, the same every time for the same cast. Best voices first (Chirp 3 HD), then Neural2/WaveNet.
+  // One voice per character, the same every time for the same cast, fitting gender and age. Best voices first (Chirp 3 HD), then Neural2/WaveNet.
   function assign(voices,cast,info){
     const tier=re=>voices.filter(v=>re.test(v.name));
     let pool=tier(/Chirp3-HD/);if(pool.length<4)pool=[...tier(/Neural2|Chirp-HD/),...tier(/Wavenet/)];if(pool.length<2)pool=voices.filter(v=>!/Studio|Polyglot|News/.test(v.name));
-    const order=(gender,names)=>{const of=pool.filter(v=>v.gender===gender);return [...names.map(n=>of.find(v=>short(v)===n)).filter(Boolean),...of.filter(v=>!names.includes(short(v)))];};
-    const f=order('FEMALE',FEMALE),m=order('MALE',MALE),map={};let fi=0,mi=0,other=0;
+    const byGender={f:pool.filter(v=>v.gender==='FEMALE'),m:pool.filter(v=>v.gender==='MALE')};
+    const bucket=(g,v)=>{const ages=VOICE_AGE[g];return ages.young.includes(short(v))?'young':ages.old.includes(short(v))?'old':ages.adult.includes(short(v))?'adult':'other';};
+    // Voices for an age, best fit first: listed order for that age, then the neighbours, then anything.
+    const near={young:['young','adult','other','old'],adult:['adult','other','young','old'],old:['old','adult','other','young']};
+    const ranked=(g,age)=>{const of=byGender[g],ages=VOICE_AGE[g];const listed=b=>b==='other'?of.filter(v=>bucket(g,v)==='other'):ages[b].map(n=>of.find(v=>short(v)===n)).filter(Boolean);return near[age].flatMap(listed);};
+    const map={},used=new Set();let other=0;
     for(const name of cast){
-      let g=genderOf(name,info);if(g==='group'||g==='?')g=other++%2?'f':'m';
-      const from=g==='f'&&f.length?f:m.length?m:f;if(!from.length)continue;
-      map[name]=from===f?f[fi++%f.length].name:m[mi++%m.length].name;
+      let g=genderOf(name,info);if(g==='group'||g==='?')g=other++%2?'f':'m';if(!byGender[g].length)g=g==='f'?'m':'f';if(!byGender[g].length)continue;
+      const a=ageOf(name,info),want=a==='child'||a==='young'?'young':a==='old'?'old':'adult';
+      const choices=ranked(g,want),pick=choices.find(v=>!used.has(v.name))||choices[[...used].length%choices.length];
+      used.add(pick.name);map[name]={voice:pick.name,tune:TUNE[a]||1};
     }
     return map;
   }
@@ -75,12 +94,12 @@
   function warm(items){
     if(!on())return;
     if(!list){loadList().then(()=>list&&warm(items));return;}
-    queue=[];for(const {who,text} of items){const voice=voiceMap[who];if(!voice)continue;for(const p of pieces(text))if(!ready.has(keyOf(voice,p)))queue.push({voice,text:p});}
+    queue=[];for(const {who,text} of items){const voice=voiceMap[who]?.voice;if(!voice)continue;for(const p of pieces(text))if(!ready.has(keyOf(voice,p)))queue.push({voice,text:p});}
     pump();
   }
   function pump(){while(running<PARALLEL&&queue.length&&!blocked){const job=queue.shift();running++;clip(job.voice,job.text).catch(err=>log('voices: line failed ('+err.message+')')).finally(()=>{running--;pump();});}}
   // The audio ready for this line now, or null (then the device voice reads it).
-  function readyFor(who,text){if(!on())return null;const voice=voiceMap[who];if(!voice)return null;const parts=pieces(text).map(p=>ready.get(keyOf(voice,p)));return parts.length&&parts.every(Boolean)?parts:null;}
+  function readyFor(who,text){if(!on())return null;const voice=voiceMap[who]?.voice;if(!voice)return null;const parts=pieces(text).map(p=>ready.get(keyOf(voice,p)));return parts.length&&parts.every(Boolean)?parts:null;}
 
   // One audio element for everything: iPhone lets it play later only after it has played once in a tap.
   let audio=null,unlocked=false;
@@ -88,14 +107,14 @@
   function element(){if(!audio){audio=new Audio();audio.preload='auto';audio.setAttribute('playsinline','');}return audio;}
   function unlock(){if(unlocked||!on())return;const a=element();try{a.src=SILENCE;a.volume=0;const p=a.play();if(p)p.then(()=>{unlocked=true;a.volume=1;log('voices: unlocked by tap');}).catch(()=>{a.volume=1;});}catch{a.volume=1;}}
   // Play the pieces in turn. cb.start once sound begins, cb.end at the end, cb.fail(reason) if it can't play.
-  function playClips(parts,rate,cb){
+  function playClips(parts,rate,cb,tune=1){
     const a=element();stopped=false;let i=0,started=false,guard=null,done=false;
     const finish=(kind,why)=>{if(done)return;done=true;clearTimeout(guard);a.onplaying=a.onended=a.onerror=a.ontimeupdate=null;kind==='end'?cb.end?.():cb.fail?.(why);};
     const next=()=>{
       if(stopped)return;if(i>=parts.length)return finish('end');
-      a.src=parts[i++];a.volume=1;a.playbackRate=rate;a.defaultPlaybackRate=rate;try{a.preservesPitch=true;a.webkitPreservesPitch=true;}catch{}
+      a.src=parts[i++];a.volume=1;const speed=rate*tune;a.playbackRate=speed;a.defaultPlaybackRate=speed;try{a.preservesPitch=tune===1;a.webkitPreservesPitch=tune===1;}catch{}
       clearTimeout(guard);guard=setTimeout(()=>{if(!started)finish('fail','did not start');},4000);
-      a.onplaying=()=>{if(!started){started=true;cb.start?.();}clearTimeout(guard);const left=((a.duration||30)-(a.currentTime||0))/rate;guard=setTimeout(()=>{a.pause();next();},left*1000+3000);};
+      a.onplaying=()=>{if(!started){started=true;cb.start?.();}clearTimeout(guard);const left=((a.duration||30)-(a.currentTime||0))/(rate*tune);guard=setTimeout(()=>{a.pause();next();},left*1000+3000);};
       a.onended=()=>{clearTimeout(guard);next();};a.onerror=()=>finish('fail','audio error');
       const p=a.play();if(p)p.catch(err=>finish('fail',err&&err.name||'blocked'));
     };
@@ -105,6 +124,6 @@
   function stop(){stopped=true;if(audio){try{audio.pause();}catch{}audio.onplaying=audio.onended=audio.onerror=null;}}
   function setOn(value){store.set('cue-voices-off',value?'0':'1');if(!value)stop();}
 
-  const api={PROXY,setPlay,warm,readyFor,playClips,unlock,stop,on,setOn,assign,genderOf,pieces,voiceOf:who=>voiceMap[who]||null};
+  const api={PROXY,setPlay,warm,readyFor,playClips,unlock,stop,on,setOn,assign,genderOf,ageOf,pieces,voiceOf:who=>voiceMap[who]?.voice||null,tuneOf:who=>voiceMap[who]?.tune||1};
   root.CueVoices=api;if(typeof module!=='undefined')module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);
