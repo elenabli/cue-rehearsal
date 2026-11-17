@@ -10,17 +10,32 @@ const V = require('../dist/voices.js');
     ...['Charon', 'Puck', 'Orus'].map(n => ({ name: 'ru-RU-Chirp3-HD-' + n, gender: 'MALE' })),
     { name: 'ru-RU-Wavenet-A', gender: 'FEMALE' }, { name: 'ru-RU-Standard-B', gender: 'MALE' },
   ];
-  const map = V.assign(list, ['СВЕТЛАНА', 'НИКОЛАЙ РОМАНОВИЧ', 'ТАМАРА ПЕТРОВНА', 'ЛЁХА', 'ВСЕ'], { 'СВЕТЛАНА': { gender: 'f' }, 'ЛЁХА': { gender: 'm' }, 'ВСЕ': { gender: 'group' } });
-  assert.strictEqual(map['СВЕТЛАНА'], 'ru-RU-Chirp3-HD-Aoede');
-  assert.strictEqual(map['НИКОЛАЙ РОМАНОВИЧ'], 'ru-RU-Chirp3-HD-Charon', 'patronymic says male');
-  assert.strictEqual(map['ТАМАРА ПЕТРОВНА'], 'ru-RU-Chirp3-HD-Kore');
-  assert.strictEqual(map['ЛЁХА'], 'ru-RU-Chirp3-HD-Puck');
-  assert.ok(map['ВСЕ'].includes('Chirp3-HD'));
-  assert.strictEqual(new Set(Object.values(map)).size, 5, 'all different');
+  const cast = ['СВЕТЛАНА', 'НИКОЛАЙ РОМАНОВИЧ', 'ТАМАРА ПЕТРОВНА', 'ЛЁХА', 'ВСЕ', 'АЛИНА', 'ДЕДУШКА'];
+  const info = { 'СВЕТЛАНА': { gender: 'f', age: 'adult' }, 'ЛЁХА': { gender: 'm', age: 'young' }, 'ВСЕ': { gender: 'group', age: '?' }, 'АЛИНА': { gender: 'f', age: 'child' }, 'ТАМАРА ПЕТРОВНА': { gender: 'f', age: 'old' } };
+  const all = ['Aoede', 'Kore', 'Leda', 'Zephyr', 'Gacrux', 'Sulafat'].map(n => ({ name: 'ru-RU-Chirp3-HD-' + n, gender: 'FEMALE' }))
+    .concat(['Charon', 'Puck', 'Orus', 'Algenib', 'Fenrir'].map(n => ({ name: 'ru-RU-Chirp3-HD-' + n, gender: 'MALE' })), list.slice(6));
+  const map = V.assign(all, cast, info);
+  const v = n => map[n].voice.split('-').pop();
+  assert.strictEqual(v('СВЕТЛАНА'), 'Aoede');
+  assert.strictEqual(v('НИКОЛАЙ РОМАНОВИЧ'), 'Charon', 'patronymic says male');
+  assert.strictEqual(v('ТАМАРА ПЕТРОВНА'), 'Gacrux', 'old woman, mature voice');
+  assert.strictEqual(v('ЛЁХА'), 'Puck', 'young man');
+  assert.strictEqual(v('АЛИНА'), 'Leda', 'child, youthful voice');
+  assert.strictEqual(v('ДЕДУШКА'), 'Algenib', 'old from the name');
+  assert.strictEqual(map['АЛИНА'].tune, 1.08);
+  assert.strictEqual(map['ДЕДУШКА'].tune, 0.96);
+  assert.strictEqual(map['СВЕТЛАНА'].tune, 1);
+  assert.strictEqual(new Set(Object.values(map).map(m => m.voice)).size, cast.length, 'all different');
+  // More characters than voices: voices repeat instead of failing.
+  const many = V.assign(list.slice(0, 2), ['A', 'B', 'C'], { A: { gender: 'f' }, B: { gender: 'f' }, C: { gender: 'f' } });
+  assert.ok(many.C.voice.includes('Chirp3-HD'));
   // Without Chirp 3 HD: WaveNet and the rest.
-  assert.strictEqual(V.assign([{ name: 'en-GB-Wavenet-A', gender: 'FEMALE' }, { name: 'en-GB-Standard-B', gender: 'MALE' }], ['ANNA'], { ANNA: { gender: 'f' } }).ANNA, 'en-GB-Wavenet-A');
+  assert.strictEqual(V.assign([{ name: 'en-GB-Wavenet-A', gender: 'FEMALE' }, { name: 'en-GB-Standard-B', gender: 'MALE' }], ['ANNA'], { ANNA: { gender: 'f' } }).ANNA.voice, 'en-GB-Wavenet-A');
   assert.strictEqual(V.genderOf('Иван Петрович', {}), 'm');
   assert.strictEqual(V.genderOf('КАБАН', {}), '?');
+  assert.strictEqual(V.ageOf('СТАРУХА', {}), 'old');
+  assert.strictEqual(V.ageOf('ДЕДОК', {}), '?');
+  assert.strictEqual(V.ageOf('Little Boy', {}), 'child');
   // Long speeches split at sentence ends.
   const long = ('Это длинное предложение для проверки. ').repeat(80);
   const parts = V.pieces(long);
@@ -64,5 +79,5 @@ const V = require('../dist/voices.js');
   assert.match((await over.json()).error, /used up for today/);
   const noKey = await worker.default.fetch(new Request('https://p.dev/speak', { method: 'POST', body: '{}' }), {});
   assert.strictEqual(noKey.status, 503);
-  console.log('Character voices passed: a different voice per character, long lines in pieces, proxy voices and speech with daily letters.');
+  console.log('Character voices passed: a different voice per character by gender and age, long lines in pieces, proxy voices and speech with daily letters.');
 })().catch(e => { console.error(e); process.exit(1); });

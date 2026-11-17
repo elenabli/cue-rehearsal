@@ -129,7 +129,7 @@ function speakAs(who,text,onDone){const V=window.CueVoices,said=typeof spokenTex
  const id=runId;quietVoice();V.stop();const mine={natural:who};activeUtterance=mine;speaking=true;render();voiceAudio(true);slog('voice: '+who+' («'+V.voiceOf(who)+'») «'+said.slice(0,40)+'»');
  const live=()=>id===runId&&activeUtterance===mine;
  V.playClips(clips,Number(data.pace)||1,{start:()=>{voiceUnlocked=true;slog('voice: natural onstart');},end:()=>{slog('voice: natural onend');if(!live())return;activeUtterance=null;speaking=false;render();onDone?.();},
-  fail:why=>{slog('voice: natural failed ('+why+'), device voice instead');if(!live())return;activeUtterance=null;speaking=false;if(!speak(text,onDone)){render();onDone?.();}}});return true;}
+  fail:why=>{slog('voice: natural failed ('+why+'), device voice instead');if(!live())return;activeUtterance=null;speaking=false;if(!speak(text,onDone)){render();onDone?.();}}},V.tuneOf(who));return true;}
 // Make the scene's partner lines (and the next scene's) into audio ahead of time.
 let warmKey='';function warmVoices(){const V=window.CueVoices;if(!V||!V.on())return;const key=[data.playId,data.activeScene,data.role,data.language,data.cast.join('|')].join('\n');if(key===warmKey)return;warmKey=key;
  V.setPlay({lang:data.language,cast:roles,info:data.castInfo||{}});const said=text=>typeof spokenText==='function'?spokenText(text):text,items=[];
