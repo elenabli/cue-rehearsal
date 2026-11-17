@@ -7,6 +7,7 @@
  const dispose=async()=>{pdf=null;if(loading){await loading.destroy().catch(()=>{});loading=null;}};
  // Put the converted play in the editor for review before saving.
  function showDraft(text,name){
+  window.CueCastInfo=null;
   const converted=CuePdf.preparePlayText(text);byId('script-input').value=converted;byId('cast-input').value=CuePdf.extractCast(converted).join('\n');byId('title-input').value=name;byId('script-message').textContent='';
   const sceneCount=CuePdf.splitPlayScenes(converted).scenes.length;
   byId('pdf-review').hidden=false;byId('pdf-review').textContent=sceneCount?t('Found {n} scenes. Italic text and text in (parentheses) are kept as stage directions in [brackets]. Review the scene headings, character names, and dialogue below, then choose Save play & rehearse. Each scene will be available in the scene picker.',{n:sceneCount}):t('No scene headings were found. You can add headings such as «Сцена 1» above each scene, or save this as a single scene. Review the character names and dialogue before saving.');
@@ -25,7 +26,7 @@
   try{
    const r=await CueAI.smartImport({proxy:PROXY,code,model:'sonnet',text});
    if(!r.scenes.length||!r.cast.length)throw Error(t('No scenes or characters were found.'));
-   byId('script-input').value=r.script;byId('cast-input').value=r.cast.map(c=>c.name).join('\n');byId('title-input').value=name;byId('script-message').textContent='';
+   byId('script-input').value=r.script;byId('cast-input').value=r.cast.map(c=>c.name).join('\n');window.CueCastInfo=Object.fromEntries(r.cast.map(c=>[c.name,{gender:c.gender,age:c.age}]));byId('title-input').value=name;byId('script-message').textContent='';
    const found=t('AI found {s} scenes and {c} characters.',{s:r.scenes.length,c:r.cast.length});
    const review=byId('pdf-review');review.hidden=false;
    const notes=(r.notes||[]).join(' ');

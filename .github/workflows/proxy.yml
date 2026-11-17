@@ -24,6 +24,8 @@ jobs:
           secrets: |
             ANTHROPIC_API_KEY
             INVITE_CODES
+            GOOGLE_TTS_KEY
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           INVITE_CODES: ${{ secrets.INVITE_CODES }}
+          GOOGLE_TTS_KEY: ${{ secrets.GOOGLE_TTS_KEY }}
