@@ -101,15 +101,48 @@
   // The audio ready for this line now, or null (then the device voice reads it).
   function readyFor(who,text){if(!on())return null;const voice=voiceMap[who]?.voice;if(!voice)return null;const parts=pieces(text).map(p=>ready.get(keyOf(voice,p)));return parts.length&&parts.every(Boolean)?parts:null;}
 
-  // One audio element for everything: iPhone lets it play later only after it has played once in a tap.
-  let audio=null,unlocked=false;
+  // Natural voices play through Web Audio, like the hands-free tones. On iPhone an <audio> element
+  // that has played keeps hold of the audio route, and the mic opened after it hears nothing.
+  // The element is only used when the partner pace isn't Natural (Web Audio can't keep the pitch then),
+  // and it is emptied after every line so it lets go of the audio.
+  let ctx=null,source=null,audio=null,unlocked=false;
+  const buffers=new Map(),KEEP=8;
   const SILENCE='data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
+  function context(){if(!ctx){try{const AC=root.AudioContext||root.webkitAudioContext;if(AC)ctx=new AC();}catch{ctx=null;}}return ctx;}
   function element(){if(!audio){audio=new Audio();audio.preload='auto';audio.setAttribute('playsinline','');}return audio;}
-  function unlock(){if(unlocked||!on())return;const a=element();try{a.src=SILENCE;a.volume=0;const p=a.play();if(p)p.then(()=>{unlocked=true;a.volume=1;log('voices: unlocked by tap');}).catch(()=>{a.volume=1;});}catch{a.volume=1;}}
+  function release(a){if(!a)return;try{a.onplaying=a.onended=a.onerror=null;a.pause();a.removeAttribute('src');a.load();}catch{}}
+  // Call from a tap: iPhone plays web audio and audio elements later only after a tap started them once.
+  function unlock(){if(!on())return;const c=context();if(c&&c.state!=='running')c.resume().catch(()=>{});
+    if(unlocked)return;const a=element();try{a.src=SILENCE;a.volume=0;const p=a.play();if(p)p.then(()=>{unlocked=true;a.volume=1;release(a);log('voices: unlocked by tap');}).catch(()=>{a.volume=1;});}catch{a.volume=1;}}
+  function decode(src){
+    if(buffers.has(src)){const b=buffers.get(src);buffers.delete(src);buffers.set(src,b);return b;}
+    const job=fetch(src).then(r=>r.arrayBuffer()).then(bytes=>new Promise((ok,no)=>{const r=ctx.decodeAudioData(bytes,ok,no);if(r&&r.then)r.then(ok,no);}));
+    buffers.set(src,job);job.catch(()=>buffers.delete(src));while(buffers.size>KEEP)buffers.delete(buffers.keys().next().value);return job;
+  }
+  const wait=ms=>new Promise(ok=>setTimeout(ok,ms));
   // Play the pieces in turn. cb.start once sound begins, cb.end at the end, cb.fail(reason) if it can't play.
-  function playClips(parts,rate,cb,tune=1){
-    const a=element();stopped=false;let i=0,started=false,guard=null,done=false;
-    const finish=(kind,why)=>{if(done)return;done=true;clearTimeout(guard);a.onplaying=a.onended=a.onerror=a.ontimeupdate=null;kind==='end'?cb.end?.():cb.fail?.(why);};
+  function playClips(parts,rate,cb,tune=1){stopped=false;const c=context();return c&&rate===1?playWeb(c,parts,tune,cb):playElement(parts,rate,cb,tune);}
+  function playWeb(c,parts,speed,cb){
+    let i=0,started=false,done=false,guard=null;
+    const finish=(kind,why)=>{if(done)return;done=true;clearTimeout(guard);source=null;kind==='end'?cb.end?.():cb.fail?.(why);};
+    const awake=()=>c.state==='running'?null:Promise.race([c.resume().catch(()=>{}),wait(1500)]);
+    for(const src of parts)decode(src).catch(()=>{});
+    const next=()=>{
+      if(stopped||done)return;if(i>=parts.length)return finish('end');
+      Promise.all([decode(parts[i++]),awake()]).then(([buffer])=>{
+        if(stopped||done)return;if(c.state!=='running')return finish('fail','web audio '+c.state);
+        const s=c.createBufferSource();s.buffer=buffer;s.playbackRate.value=speed;s.connect(c.destination);
+        const after=()=>{if(source!==s)return;source=null;clearTimeout(guard);next();};
+        s.onended=after;source=s;s.start();if(!started){started=true;log('voices: playing through web audio');cb.start?.();}
+        clearTimeout(guard);guard=setTimeout(()=>{try{s.stop();}catch{}after();},buffer.duration/speed*1000+3000);
+      },err=>finish('fail',err&&err.message||'could not decode'));
+    };
+    next();
+    return ()=>{done=true;clearTimeout(guard);};
+  }
+  function playElement(parts,rate,cb,tune){
+    const a=element();let i=0,started=false,guard=null,done=false;
+    const finish=(kind,why)=>{if(done)return;done=true;clearTimeout(guard);a.ontimeupdate=null;release(a);kind==='end'?cb.end?.():cb.fail?.(why);};
     const next=()=>{
       if(stopped)return;if(i>=parts.length)return finish('end');
       a.src=parts[i++];a.volume=1;const speed=rate*tune;a.playbackRate=speed;a.defaultPlaybackRate=speed;try{a.preservesPitch=tune===1;a.webkitPreservesPitch=tune===1;}catch{}
@@ -121,7 +154,7 @@
     next();
     return ()=>{done=true;clearTimeout(guard);};
   }
-  function stop(){stopped=true;if(audio){try{audio.pause();}catch{}audio.onplaying=audio.onended=audio.onerror=null;}}
+  function stop(){stopped=true;if(source){const s=source;source=null;try{s.stop();}catch{}}release(audio);}
   function setOn(value){store.set('cue-voices-off',value?'0':'1');if(!value)stop();}
 
   const api={PROXY,setPlay,warm,readyFor,playClips,unlock,stop,on,setOn,assign,genderOf,ageOf,pieces,voiceOf:who=>voiceMap[who]?.voice||null,tuneOf:who=>voiceMap[who]?.tune||1};
