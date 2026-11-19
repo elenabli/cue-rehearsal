@@ -7,7 +7,7 @@ A small Cloudflare Worker that holds Cue's AI keys, so the app (a static site on
 | `GET /ping` | Checks whether the Anthropic key is set |
 | `GET /voices?lang=ru-RU` | The Google voices for a language: `{voices: [{name, gender}]}` |
 | `POST /speak` | `{voice, text}` → one partner line as MP3, made by Google Cloud Text-to-Speech. Counts letters per day (`VOICE_PER_IP_CHARS`, `VOICE_DAILY_CHARS`); the app keeps each line on the phone, so it is made only once |
-| `POST /import` | `{model: "haiku"\|"sonnet"\|"opus", lines: [...], start?, part?, of?, names?}` → Claude labels each line (scene, speech, direction, skip) and lists the cast; the answer streams back to the app, which rebuilds the play from its own lines (`dist/ai-import.js`) |
+| `POST /import` | `{lines: [...], start?, part?, of?, names?}` (one part of a play, at most 60,000 letters) → Claude Sonnet labels each line (scene, speech, direction, skip) and lists the cast; the answer streams back to the app, which rebuilds the play from its own lines (`dist/ai-import.js`) |
 
 ## Setup (once)
 
@@ -27,3 +27,7 @@ To change a key later, update the GitHub secret and run the workflow again.
 If a model answers with a rate-limit error, the Anthropic account is on its first usage tier; buying more credit raises the limit.
 
 **Spending cap.** In the Anthropic console → Settings → Limits, set a monthly spend limit (for example $10). It is the hard ceiling whatever happens to the proxy.
+
+## Spending limits
+
+The proxy is public within its daily limits, and it always uses Sonnet whatever the app asks for. As a last safety net, also set a monthly spend limit in the Anthropic Console (Settings → Limits) and a budget alert for the Text-to-Speech project in Google Cloud (Billing → Budgets & alerts).
