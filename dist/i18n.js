@@ -70,6 +70,7 @@
   'Open now':'Открыта',
   'Backup saved to your downloads.':'Копия сохранена в загрузки.',
   'This file is not a Cue backup.':'Это не резервная копия Cue.',
+  'There is not enough space on this device to restore this backup. Nothing was changed.':'На этом устройстве не хватает места, чтобы восстановить копию. Ничего не изменилось.',
   'Browser storage is full or unavailable. Save a backup, then delete a play you no longer need.':'Память браузера заполнена или недоступна. Сохраните копию и удалите ненужную пьесу.',
   'Delete “{title}” and its progress?':v=>`Удалить «${v.title}» и её прогресс?`,
   'Delete “{title}”':v=>`Удалить «${v.title}»`,

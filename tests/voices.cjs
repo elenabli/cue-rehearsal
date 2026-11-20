@@ -61,7 +61,7 @@ const V = require('../dist/voices.js');
     get: async k => store.get(k), put: async o => { for (const [k, v] of Object.entries(o)) store.set(k, v); },
     list: async () => new Map(store), delete: async keys => keys.forEach(k => store.delete(k)),
   } });
-  const env = { GOOGLE_TTS_KEY: 'g', VOICE_PER_IP_CHARS: '20', VOICE_DAILY_CHARS: '1000', COUNTER: { idFromName: n => n, get: () => ({ fetch: (u, init) => counter.fetch(new Request(u, init)) }) } };
+  const env = { GOOGLE_TTS_KEY: 'g', VOICE_PER_IP_CHARS: '30', VOICE_DAILY_CHARS: '1000', COUNTER: { idFromName: n => n, get: () => ({ fetch: (u, init) => counter.fetch(new Request(u, init)) }) } };
   const ping = await (await worker.default.fetch(new Request('https://p.dev/ping'), env)).json();
   assert.strictEqual(ping.voices, true);
   const voices = await (await worker.default.fetch(new Request('https://p.dev/voices?lang=ru-RU'), env)).json();
@@ -74,9 +74,10 @@ const V = require('../dist/voices.js');
   assert.strictEqual(Buffer.from(await ok.arrayBuffer()).toString(), 'ID3fake');
   assert.strictEqual(JSON.parse(calls[1].init.body).voice.name, 'ru-RU-Chirp3-HD-Aoede');
   assert.strictEqual(store.get('ttsip:' + new Date().toISOString().slice(0, 10) + ':1.1.1.1'), 21, 'letters counted');
-  const over = await speak('Ещё');
-  assert.strictEqual(over.status, 429);
+  const over = await speak('Это уже лишнее');
+  assert.strictEqual(over.status, 429, 'a line that would pass the limit is refused');
   assert.match((await over.json()).error, /used up for today/);
+  assert.strictEqual((await speak('Ещё')).status, 200, 'a line that fits is still read');
   const noKey = await worker.default.fetch(new Request('https://p.dev/speak', { method: 'POST', body: '{}' }), {});
   assert.strictEqual(noKey.status, 503);
   console.log('Character voices passed: a different voice per character by gender and age, long lines in pieces, proxy voices and speech with daily letters.');

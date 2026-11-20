@@ -4,11 +4,13 @@
 // limit (DAILY_LIMIT in total, PER_IP_LIMIT per address); an invite code skips
 // the limits. Plays are passed through and forgotten; only counts are kept.
 
-const MODELS = { haiku: 'claude-haiku-5-5', sonnet: 'claude-sonnet-5-5', opus: 'claude-opus-5-5' };
-// Haiku has no server-side refusal fallback; the others fall back by policy category.
-const FALLBACK = new Set(['claude-sonnet-5-5', 'claude-opus-5-5']);
+// Always Sonnet, whatever the caller asks for: the proxy is public, so the caller can't pick a dearer model.
+const MODEL = 'claude-sonnet-5-5';
 const MAX_LINES = 20000;
-const MAX_CHARS = 800000;
+// The app sends a play in parts of about 15,000 letters (at most 6 parts), so one part never needs more than this.
+// It keeps the most one request can cost small.
+const MAX_CHARS = 60000;
+const MAX_TOKENS = 32000;
 
 export const SYSTEM = `You read stage plays (Russian or English) for a rehearsal app. The user message is the play's extracted text, one line per row, each row starting with its line number and "| ". Text in [square brackets] was italic in the original, usually a stage direction.
 
@@ -84,7 +86,7 @@ export function validCode(code, env) {
 
 // Build the Claude request for /import. Exported for tests.
 export function importRequest(body) {
-  const model = MODELS[body && body.model] || MODELS.sonnet;
+  const model = MODEL;
   const lines = body && body.lines;
   if (!Array.isArray(lines) || !lines.length || lines.some(l => typeof l !== 'string')) throw new Error('Send the play as a list of lines.');
   if (lines.length > MAX_LINES) throw new Error(`The play is too long (${lines.length} lines, at most ${MAX_LINES}).`);
@@ -95,20 +97,17 @@ export function importRequest(body) {
     text = `Part ${Number(body.part) || 1} of ${body.of}, lines ${start}–${start + lines.length - 1}.` +
       (names.length ? ` Speech labels found in the whole play: ${names.join(', ')}.` : '') + '\n\n' + text;
   }
-  if (text.length > MAX_CHARS) throw new Error('The play is too long to read in one go.');
+  if (text.length > MAX_CHARS) throw new Error('This part of the play is too long to read in one go.');
   const request = {
     model,
-    max_tokens: 64000,
+    max_tokens: MAX_TOKENS,
     stream: true,
     system: SYSTEM,
     output_config: { effort: 'low', format: { type: 'json_schema', schema: SCHEMA } },
     messages: [{ role: 'user', content: text }],
+    fallbacks: 'default',
   };
-  const headers = { 'content-type': 'application/json', 'anthropic-version': '2026-10-21' };
-  if (FALLBACK.has(model)) {
-    request.fallbacks = 'default';
-    headers['anthropic-beta'] = 'server-side-fallback-2026-07-01';
-  }
+  const headers = { 'content-type': 'application/json', 'anthropic-version': '2026-10-21', 'anthropic-beta': 'server-side-fallback-2026-07-01' };
   return { request, headers };
 }
 
@@ -119,8 +118,9 @@ export class DailyCounter {
     const { day, ip, total, perIp, kind = '', amount = 1 } = await request.json();
     const allKey = kind + 'all:' + day, ipKey = kind + 'ip:' + day + ':' + ip;
     const [all, mine] = await Promise.all([this.state.storage.get(allKey), this.state.storage.get(ipKey)]);
-    if ((all || 0) >= total) return Response.json({ ok: false, reason: 'day' });
-    if ((mine || 0) >= perIp) return Response.json({ ok: false, reason: 'ip' });
+    // Count what this request adds, so a long line can't run past the limit.
+    if ((all || 0) + amount > total) return Response.json({ ok: false, reason: 'day' });
+    if ((mine || 0) + amount > perIp) return Response.json({ ok: false, reason: 'ip' });
     await this.state.storage.put({ [allKey]: (all || 0) + amount, [ipKey]: (mine || 0) + amount });
     // Forget earlier days.
     const keys = [...(await this.state.storage.list({ limit: 1000 })).keys()].filter(k => !k.includes(':' + day));
