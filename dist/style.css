@@ -211,3 +211,5 @@ body.rehearsing.pocket .pocket-guard{transition:background-color .8s}
 body.rehearsing.pocket .pocket-guard.dark{background:#000}
 body.rehearsing.pocket .pocket-guard.dark span{color:#a3a3a3;font-size:15px;border-top-color:#333}
 .pdf-review ul{margin:6px 0 0;padding-left:18px}
+
+.account-setting h3{margin:0 0 4px}.account-setting>div>p{margin:0 0 12px}.auto-listen-setting #account-name{display:block;width:100%;height:auto;margin-bottom:12px;accent-color:auto}.account-buttons{display:flex;flex-wrap:wrap;gap:10px}.account-buttons .button{flex:1;white-space:nowrap}#account-message:empty{display:none}#account-message{margin:10px 0 0}

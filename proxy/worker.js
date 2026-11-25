@@ -1,10 +1,13 @@
 // Cue proxy: a small Cloudflare Worker that holds the AI keys so the app
 // (a static site on GitHub Pages) never sees them. It only does Cue's own
-// jobs (reading a play, speaking partner lines), never general chat. Anyone may use it within a daily
+// jobs (reading a play, speaking partner lines, keeping accounts), never general chat. Anyone may use it within a daily
 // limit (DAILY_LIMIT in total, PER_IP_LIMIT per address); an invite code skips
 // the limits. Plays are passed through and forgotten; only counts are kept.
 
 // Always Sonnet, whatever the caller asks for: the proxy is public, so the caller can't pick a dearer model.
+import { accountRoute } from './accounts.js';
+export { Account } from './accounts.js';
+
 const MODEL = 'claude-sonnet-5-5';
 const MAX_LINES = 20000;
 // The app sends a play in parts of about 15,000 letters (at most 6 parts), so one part never needs more than this.
@@ -12,7 +15,7 @@ const MAX_LINES = 20000;
 const MAX_CHARS = 60000;
 const MAX_TOKENS = 32000;
 
-export const SYSTEM = `You read stage plays (Russian or English) for a rehearsal app. The user message is the play's extracted text, one line per row, each row starting with its line number and "| ". Text in [square brackets] was italic in the original, usually a stage direction.
+const SYSTEM = `You read stage plays (Russian or English) for a rehearsal app. The user message is the play's extracted text, one line per row, each row starting with its line number and "| ". Text in [square brackets] was italic in the original, usually a stage direction.
 
 Answer with the cast and with "marks". A mark is a pair [line, code] that says what starts on that line; it lasts until the next mark. Codes:
 - 0, 1, 2 …: a speech by that character, by their position in "cast" (0 is the first). Mark the line where the speaker's name stands.
@@ -30,7 +33,7 @@ Cast: every character who speaks, once, by the name their speech labels use most
 
 Never rewrite, correct, translate or summarise the play. Only point at line numbers.`;
 
-export const SCHEMA = {
+const SCHEMA = {
   type: 'object',
   additionalProperties: false,
   required: ['language', 'title', 'cast', 'scenes', 'marks'],
@@ -70,7 +73,7 @@ function cors(request, env) {
   return {
     'access-control-allow-origin': allowed.includes(origin) ? origin : allowed[0],
     'access-control-allow-methods': 'GET, POST, OPTIONS',
-    'access-control-allow-headers': 'content-type, x-cue-code',
+    'access-control-allow-headers': 'content-type, x-cue-code, authorization',
     'access-control-max-age': '86400',
     vary: 'origin',
   };
@@ -136,6 +139,11 @@ export async function takeQuota(request, env, voice = 0) {
   const day = new Date().toISOString().slice(0, 10);
   const ip = request.headers.get('cf-connecting-ip') || 'unknown';
   const stub = env.COUNTER.get(env.COUNTER.idFromName('imports'));
+  if (voice === 'signup') {
+    const limits = { kind: 'acct', amount: 1, total: Number(env.SIGNUP_DAILY) || 200, perIp: Number(env.SIGNUP_PER_IP) || 10 };
+    const r = await (await stub.fetch('https://counter/take', { method: 'POST', body: JSON.stringify({ day, ip, ...limits }) })).json();
+    return r.ok ? null : 'Too many new accounts today. Try again tomorrow.';
+  }
   const limits = voice
     ? { kind: 'tts', amount: voice, total: Number(env.VOICE_DAILY_CHARS) || 300000, perIp: Number(env.VOICE_PER_IP_CHARS) || 100000 }
     : { total: Number(env.DAILY_LIMIT) || 20, perIp: Number(env.PER_IP_LIMIT) || 5 };
@@ -228,6 +236,11 @@ export default {
         status: upstream.status,
         headers: { ...headers, 'content-type': upstream.headers.get('content-type') || 'text/event-stream', 'cache-control': 'no-store' },
       });
+    }
+
+    if (url.pathname === '/account' || url.pathname.startsWith('/account/')) {
+      const r = await accountRoute(request, env, url.pathname, () => takeQuota(request, env, 'signup'));
+      if (r) return json(r.body, r.status, { ...headers, 'cache-control': 'no-store' });
     }
 
     return json({ error: 'Not found.' }, 404, headers);
