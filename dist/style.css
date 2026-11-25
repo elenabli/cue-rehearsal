@@ -222,3 +222,21 @@ body.rehearsing.pocket .pocket-guard.dark span{color:#a3a3a3;font-size:15px;bord
 .snip-parts .snip-part.on{color:#141414;background:var(--marker);box-shadow:0 0 0 2px var(--marker)}
 .snip-tip{display:block;font-size:14px;color:var(--muted);margin:0 0 10px}
 .read-line.mine .snip-part:not(.on){background:transparent;box-shadow:none;color:var(--muted)}
+/* Learn by heart: a card on Home, and its own view with a bar that stays at the bottom of the screen. */
+.learn-card{display:flex;align-items:center;gap:12px;width:100%;margin:16px 0 0;padding:14px 16px;min-height:0;text-align:left;background:transparent;border:1.5px solid var(--ink);border-radius:10px;color:var(--ink);font-weight:400}
+.learn-card-text{display:block;flex:1}
+.learn-card b{display:inline;font:600 17px 'Golos Text',sans-serif;background:var(--marker);color:#141414;padding:0 4px;box-decoration-break:clone;-webkit-box-decoration-break:clone}
+.learn-card small{display:block;margin-top:6px;font-size:14px;line-height:1.45;color:var(--muted)}
+.learn-card-go{font-size:28px;line-height:1;color:var(--ink)}
+.learn-intro{margin:16px 0 4px}.learn-intro h2{margin:0 0 6px;font:700 22px 'Golos Text',sans-serif}.learn-intro p{margin:0;font-size:15px;line-height:1.5;color:var(--muted)}
+.learn-line{padding:14px 4px 6px;border-bottom:1px solid var(--line)}
+.learn-cue{display:block;font-size:13px;line-height:1.4;color:var(--muted);margin:0 0 8px}
+.learn-bar{position:fixed;left:0;right:0;bottom:0;z-index:30;display:flex;align-items:center;gap:12px;padding:10px 16px calc(10px + env(safe-area-inset-bottom));background:var(--cfffffff2);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border-top:1px solid var(--line)}
+.learn-bar[hidden]{display:none}
+.learn-bar span{flex:1;font-size:14px;line-height:1.35;color:var(--ink)}
+.learn-bar .button{flex:none;min-height:50px;padding:0 22px;font-size:16px;border-radius:10px}
+.learn-bar .button:disabled{opacity:.35}
+body.learning .reader{padding-bottom:calc(110px + env(safe-area-inset-bottom))}
+.learn-line .snip-parts .snip-part:not(.on){color:var(--ink)}
+.learn-line .snip-parts .snip-part.on{box-shadow:0 0 0 2px var(--marker)}
+.stage-line.long-mine,body.rehearsing .stage-line.long-mine,#hint-text.long-mine{font-size:22px;line-height:1.55}
