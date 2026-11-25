@@ -212,6 +212,8 @@ body.rehearsing.pocket .pocket-guard.dark{background:#000}
 body.rehearsing.pocket .pocket-guard.dark span{color:#a3a3a3;font-size:15px;border-top-color:#333}
 .pdf-review ul{margin:6px 0 0;padding-left:18px}
 
+.account-setting h3{margin:0 0 4px}.account-setting>div>p{margin:0 0 12px}.auto-listen-setting #account-name{display:block;width:100%;height:auto;margin-bottom:12px;accent-color:auto}.account-buttons{display:flex;flex-wrap:wrap;gap:10px}.account-buttons .button{flex:1;white-space:nowrap}#account-message:empty{display:none}#account-message{margin:10px 0 0}
+.welcome-steps{margin:0 0 16px;padding-left:20px;font-size:15px;line-height:1.5}.welcome-steps li{margin-bottom:4px}.welcome-account{display:block;margin:12px auto 0;text-decoration:underline;text-underline-offset:3px}
 /* Learn by heart: the chosen line in pieces; the chosen piece gets the highlighter. */
 .read-line>button.read-learn{display:flex;width:100%;text-align:center;justify-content:center;min-height:46px;font-size:16px;border-radius:10px;padding:0 18px;margin:0 0 12px}
 .read-line.learning{padding:12px 4px 0}

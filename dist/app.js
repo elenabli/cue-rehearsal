@@ -391,4 +391,5 @@ function closeWelcome(){data.welcomed=true;$('welcome').hidden=true;persist();}
 $('welcome').hidden=!!data.welcomed;
 $('welcome-add').onclick=()=>{closeWelcome();showView('script');};
 $('welcome-demo').onclick=closeWelcome;
+$('welcome-account').onclick=()=>{showView('settings');const signedIn=window.CueAccount?.current;if(!signedIn)setTimeout(()=>$('account-name').focus(),50);};
 render();if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
