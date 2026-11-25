@@ -421,9 +421,15 @@
   'No Cue account uses this passkey. It may have been deleted.':'Ни один аккаунт Cue не использует этот ключ. Возможно, аккаунт удалён.',
   'This account already exists.':'Такой аккаунт уже есть.',
   'Bad request.':'Неверный запрос.',
+  'Not signed in':'Вход не выполнен',
+  'Account: {name}':'Аккаунт: {name}',
+  'Your account':'Ваш аккаунт',
+  'Already have an account?':'Уже есть аккаунт?',
+  'You are signed in on this device.':'Вы вошли на этом устройстве.',
+  'Close':'Закрыть',
   ': add your play from a PDF or Word file.':': добавьте пьесу из файла PDF или Word.',
   ': choose your role and a scene, then start.':': выберите роль и сцену и начните.',
-  ': voices, language and your account.':': голоса, язык и ваш аккаунт.',
+  ': voices and language.':': голоса и язык.',
   'Sign in or create an account':'Войти или создать аккаунт',
  };
  const dict={en:EN,ru:RU};
