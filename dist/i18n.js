@@ -9,6 +9,7 @@
  const en=(n,one,many)=>n===1?one:many;
  const EN={
   '{n} lines to work on.':v=>`${v.n} ${en(v.n,'line','lines')} to work on.`,
+  '{n} phrases chosen':v=>`${v.n} ${en(v.n,'phrase','phrases')} chosen`,
   '{n} scenes':v=>`${v.n} ${en(v.n,'scene','scenes')}`,
   'Replace the plays on this device with the {n} plays in the backup?':v=>`Replace the plays on this device with the ${v.n} ${en(v.n,'play','plays')} in the backup?`,
   '{n} lines':v=>`${v.n} ${en(v.n,'line','lines')}`,
@@ -55,6 +56,13 @@
   'Learn by heart':'Учить наизусть',
   'Tap where the piece starts, then where it ends.':'Нажмите, где отрывок начинается, а потом где заканчивается.',
   '▶ Repeat this piece':'▶ Повторять отрывок',
+  '▶ Repeat':'▶ Повторять',
+  'A long monologue? Pick a piece and repeat it until you know it.':'Длинный монолог? Выберите отрывок и повторяйте его, пока не запомните.',
+  'Choose a piece of your text. Cue reads it to you twice, then hides the words and you say it from memory, as many times as you like.':'Выберите отрывок своего текста. Cue дважды прочитает его вам, потом спрячет слова, и вы скажете его по памяти — столько раз, сколько нужно.',
+  'Tap the first phrase of the piece, then the last.':'Нажмите первую фразу отрывка, потом последнюю.',
+  'Tap a phrase to start the piece.':'Нажмите фразу, с которой начнётся отрывок.',
+  'Now tap the last phrase, or repeat this one.':'Теперь нажмите последнюю фразу или повторяйте эту.',
+  '{n} phrases chosen':v=>`Выбрано: ${v.n} ${ru(v.n,'фраза','фразы','фраз')}`,
   'Said right: {n}':v=>`Верно: ${v.n}`,
   'LISTEN':'СЛУШАЙТЕ',
   'Listen, then say it.':'Послушайте и повторите.',

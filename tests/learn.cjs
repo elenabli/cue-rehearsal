@@ -15,13 +15,16 @@ run("data.autoMic=false");assert.equal(run('data.role'),'Анна');
 assert.deepEqual([...run("CueCore.parts('Я не знаю. Что делать? Уйти или остаться.')")],['Я не знаю.','Что делать?','Уйти или остаться.']);
 const longOne=run("CueCore.parts('Вот, например, когда я был маленьким, мы жили в деревне у реки, и каждый вечер отец брал меня на рыбалку, и это было счастье.')");
 assert.ok(longOne.length>1,'A long sentence splits at commas');assert.equal(longOne.join(' '),'Вот, например, когда я был маленьким, мы жили в деревне у реки, и каждый вечер отец брал меня на рыбалку, и это было счастье.');
-// Reading view: tap Анна's line, Learn by heart, choose pieces 2–3.
-get('read-scene').onclick();const li=()=>get('reader-lines').children[1];
-li().children[0].onclick();const learn=li().children.find(c=>c.textContent==='Learn by heart');assert.ok(learn,'Your own line offers Learn by heart');
-learn.onclick();const box=()=>li().children[1];assert.equal(box().children.filter(c=>c.textContent&&c.textContent.trim()).length,3,'The line shows as 3 pieces');
-const pieces=()=>box().children.filter(c=>c.className);pieces()[1].onclick();pieces()[2].onclick();
+// Home shows the Learn by heart card; it opens a view with only Анна's lines, already in pieces, and a bar at the bottom.
+assert.equal(get('learn-open').hidden,false,'The card is on Home');get('learn-open').onclick();
+assert.equal(run('reading&&learning'),true);assert.equal(get('learn-intro').hidden,false);assert.equal(get('learn-bar').hidden,false);assert.equal(get('learn-go').disabled,true,'Nothing chosen yet');
+assert.equal(get('reader-lines').children.length,1,'Only her lines');const li=()=>get('reader-lines').children[0];
+const box=()=>li().children.find(c=>c.className==='snip-parts');const pieces=()=>box().children.filter(c=>c.className);assert.equal(pieces().length,3,'The line shows as 3 pieces');
+assert.match(li().children[0].textContent,/Борис: Ну что\?/i,'Her cue is shown above');
+pieces()[1].onclick();assert.match(get('learn-picked').textContent,/last phrase/);pieces()[2].onclick();
 assert.match(pieces()[1].className,/on/);assert.match(pieces()[2].className,/on/);assert.doesNotMatch(pieces()[0].className,/on/);
-const before=spoken.length;li().children[3].onclick();
+assert.equal(get('learn-go').disabled,false);assert.equal(get('learn-picked').textContent,'2 phrases chosen');
+const before=spoken.length;get('learn-go').onclick();
 assert.equal(run('running'),true);assert.equal(run('reading'),false);assert.equal(run('lines[data.index].text'),'Что делать? Уйти или остаться.');
 // First time: heard first, shown.
 assert.equal(spoken.length,before+1);assert.equal(spoken.at(-1).text,'Что делать? Уйти или остаться.');assert.equal(get('current-line').hidden,false);spoken.at(-1).onend();
@@ -36,8 +39,9 @@ type('Что делать? Уйти или остаться.');assert.equal(run(
 get('start').onclick();assert.equal(run('running'),false);assert.equal(run('snip'),null);assert.equal(run('reading'),true);
 assert.equal(run('lines[1].text'),'Я не знаю. Что делать? Уйти или остаться.');assert.equal(run('picking.from'),1);assert.equal(run('picking.to'),2);
 assert.deepEqual([...run('hardLines()')],[],'Practice does not mark hard lines');
-// One-piece lines start straight away.
-get('reader-back').onclick();get('script-input').value='СЦЕНА 1\nБОРИС: Ну что?\nАННА: Остаюсь.';get('save-script').onclick();run("data.autoMic=false");
-get('read-scene').onclick();get('reader-lines').children[1].children[0].onclick();get('reader-lines').children[1].children.find(c=>c.textContent==='Learn by heart').onclick();
-assert.equal(run('running'),true);assert.equal(run('snip.text'),'Остаюсь.');
-console.log('Learn by heart passed: pieces chosen, heard then from memory, repeats counted, pause returns to the reading view.');
+// From the reading view: tap her line, Learn by heart opens the view with that line's first piece chosen.
+get('reader-back').onclick();assert.equal(run('reading'),false);get('read-scene').onclick();assert.equal(run('learning'),false);
+get('reader-lines').children[1].children[0].onclick();get('reader-lines').children[1].children.find(c=>c.textContent==='Learn by heart').onclick();
+assert.equal(run('learning'),true);assert.equal(run('picking.at'),1);assert.equal(get('learn-go').disabled,false);
+pieces()[2].onclick();assert.equal(run('picking.from'),2,'A first tap starts a new piece');get('learn-go').onclick();assert.equal(run('snip.text'),'Уйти или остаться.');
+console.log('Learn by heart passed: pieces chosen, heard then from memory, repeats counted, card on Home, bar at the bottom, pause returns to the view.');
