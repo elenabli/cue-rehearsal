@@ -214,3 +214,11 @@ body.rehearsing.pocket .pocket-guard.dark span{color:#a3a3a3;font-size:15px;bord
 
 .account-setting h3{margin:0 0 4px}.account-setting>div>p{margin:0 0 12px}.auto-listen-setting #account-name{display:block;width:100%;height:auto;margin-bottom:12px;accent-color:auto}.account-buttons{display:flex;flex-wrap:wrap;gap:10px}.account-buttons .button{flex:1;white-space:nowrap}#account-message:empty{display:none}#account-message{margin:10px 0 0}
 .welcome-steps{margin:0 0 16px;padding-left:20px;font-size:15px;line-height:1.5}.welcome-steps li{margin-bottom:4px}.welcome-account{display:block;margin:12px auto 0;text-decoration:underline;text-underline-offset:3px}
+/* Learn by heart: the chosen line in pieces; the chosen piece gets the highlighter. */
+.read-line>button.read-learn{display:flex;width:100%;text-align:center;justify-content:center;min-height:46px;font-size:16px;border-radius:10px;padding:0 18px;margin:0 0 12px}
+.read-line.learning{padding:12px 4px 0}
+.snip-parts{margin:0 0 8px;font:16px/1.7 'PT Mono',ui-monospace,monospace}
+.snip-parts .snip-part{cursor:pointer;color:var(--muted);padding:2px 0;-webkit-tap-highlight-color:transparent;-webkit-box-decoration-break:clone;box-decoration-break:clone}
+.snip-parts .snip-part.on{color:#141414;background:var(--marker);box-shadow:0 0 0 2px var(--marker)}
+.snip-tip{display:block;font-size:14px;color:var(--muted);margin:0 0 10px}
+.read-line.mine .snip-part:not(.on){background:transparent;box-shadow:none;color:var(--muted)}
