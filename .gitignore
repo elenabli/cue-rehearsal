@@ -24,3 +24,4 @@ private/
 coverage/
 playwright-report/
 test-results/
+.wrangler/

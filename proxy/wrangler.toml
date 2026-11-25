@@ -13,6 +13,9 @@ PER_IP_LIMIT = "30"
 # Character voices: letters spoken per day without an invite code (a long play is about 50,000).
 VOICE_DAILY_CHARS = "300000"
 VOICE_PER_IP_CHARS = "100000"
+# New accounts per day: in total, and per address.
+SIGNUP_DAILY = "200"
+SIGNUP_PER_IP = "10"
 
 [[durable_objects.bindings]]
 name = "COUNTER"
@@ -21,6 +24,15 @@ class_name = "DailyCounter"
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["DailyCounter"]
+
+# Accounts: one object per person ("user:<id>") plus one for sign-in challenges.
+[[durable_objects.bindings]]
+name = "ACCOUNTS"
+class_name = "Account"
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["Account"]
 
 # Secrets (set by .github/workflows/proxy.yml from the repository's secrets):
 #   ANTHROPIC_API_KEY  key from console.anthropic.com
