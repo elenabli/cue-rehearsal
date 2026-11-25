@@ -415,6 +415,10 @@
   'No Cue account uses this passkey. It may have been deleted.':'Ни один аккаунт Cue не использует этот ключ. Возможно, аккаунт удалён.',
   'This account already exists.':'Такой аккаунт уже есть.',
   'Bad request.':'Неверный запрос.',
+  ': add your play from a PDF or Word file.':': добавьте пьесу из файла PDF или Word.',
+  ': choose your role and a scene, then start.':': выберите роль и сцену и начните.',
+  ': voices, language and your account.':': голоса, язык и ваш аккаунт.',
+  'Sign in or create an account':'Войти или создать аккаунт',
  };
  const dict={en:EN,ru:RU};
  const key=s=>String(s).replace(/\s+/g,' ').trim();
