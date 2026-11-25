@@ -115,5 +115,14 @@
     const partial=best>0&&best<n&&d[best][m]<=Math.max(0.5,Math.floor(best/4));
     return {heard,missed,partial};
   }
-  const api={diffWords,progress,flattenBrackets,pageNumberInfo,paginationTotals,cleanPaginationText,normalize,speakerKey,resolveSpeaker,isSpeakerName,parseScript,matches};root.CueCore=api;if(typeof module!=='undefined')module.exports=api;
+
+  // A long line split into pieces to learn one at a time: sentences, and a long sentence again at its commas, dashes or semicolons.
+  // The pieces joined with spaces give back the line's words in order.
+  function parts(text){const words=n=>n.split(/\s+/).filter(Boolean).length,out=[];
+    for(const sentence of String(text).match(/[^.!?…]+(?:[.!?…]+["»”’)]*)?|[.!?…]+/g)||[]){const s=sentence.trim();if(!s)continue;
+      if(words(s)<=16){out.push(s);continue;}
+      let piece='';for(const bit of s.split(/(?<=[,;:])\s+|\s+(?=[—–-]\s)/)){piece=piece?piece+' '+bit:bit;if(words(piece)>=6){out.push(piece);piece='';}}
+      if(piece){if(out.length&&words(piece)<4)out[out.length-1]+=' '+piece;else out.push(piece);}}
+    return out;}
+  const api={parts,diffWords,progress,flattenBrackets,pageNumberInfo,paginationTotals,cleanPaginationText,normalize,speakerKey,resolveSpeaker,isSpeakerName,parseScript,matches};root.CueCore=api;if(typeof module!=='undefined')module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);
