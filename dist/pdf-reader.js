@@ -7,7 +7,7 @@
  const dispose=async()=>{pdf=null;if(loading){await loading.destroy().catch(()=>{});loading=null;}};
  // Put the converted play in the editor for review before saving.
  function showDraft(text,name){
-  window.CueCastInfo=null;
+  window.CueCastInfo=null;askAbout([]);
   const converted=CuePdf.preparePlayText(text);byId('script-input').value=converted;byId('cast-input').value=CuePdf.extractCast(converted).join('\n');byId('title-input').value=name;byId('script-message').textContent='';
   const sceneCount=CuePdf.splitPlayScenes(converted).scenes.length;
   byId('pdf-review').hidden=false;byId('pdf-review').textContent=sceneCount?t('Found {n} scenes. Italic text and text in (parentheses) are kept as stage directions in [brackets]. Review the scene headings, character names, and dialogue below, then choose Save play & rehearse. Each scene will be available in the scene picker.',{n:sceneCount}):t('No scene headings were found. You can add headings such as «Сцена 1» above each scene, or save this as a single scene. Review the character names and dialogue before saving.');
@@ -26,14 +26,32 @@
   try{
    const r=await CueAI.smartImport({proxy:PROXY,code,model:'sonnet',text});
    if(!r.scenes.length||!r.cast.length)throw Error(t('No scenes or characters were found.'));
-   byId('script-input').value=r.script;byId('cast-input').value=r.cast.map(c=>c.name).join('\n');window.CueCastInfo=Object.fromEntries(r.cast.map(c=>[c.name,{gender:c.gender,age:c.age}]));byId('title-input').value=name;byId('script-message').textContent='';
+   byId('script-input').value=r.script;byId('cast-input').value=r.cast.map(c=>c.name).join('\n');window.CueCastInfo=Object.fromEntries(r.cast.map(c=>[c.name,{gender:c.gender,age:c.age,...(c.members&&c.members.length?{members:c.members}:{})}]));byId('title-input').value=name;byId('script-message').textContent='';
    const found=t('AI found {s} scenes and {c} characters.',{s:r.scenes.length,c:r.cast.length});
    const review=byId('pdf-review');review.hidden=false;
-   const notes=(r.notes||[]).join(' ');
+   const groups=r.cast.filter(c=>c.members&&c.members.length).map(c=>t('{group} = {names}. Lines they say together are lines for each of them.',{group:c.name,names:c.members.join(', ')}));
+   const notes=[...(r.notes||[]),...groups].join(' ');askAbout(r.doubts||[]);
    if(r.warnings.length)review.innerHTML=found+' '+t('Please check:')+listHtml(r.warnings)+(notes?'<p>'+notes.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))+'</p>':'');else review.textContent=found+(notes?' '+notes:'')+' '+t('Look it over, then choose Save and rehearse.');
    status(t('Read with AI in {s} s.',{s:secs()}));return {ok:true};
   }catch(error){return {ok:false,reason:error.message};}
   finally{clearInterval(tick);}
+ }
+ // One question per pair of names the AI was unsure about. Not answering keeps them apart.
+ function askAbout(doubts){
+  const box=byId('cast-questions');if(!box)return;box.replaceChildren();box.hidden=!doubts.length;
+  for(const {keep,drop} of doubts){
+   const row=document.createElement('div');row.className='cast-question';
+   const q=document.createElement('p');q.textContent=t('Are {a} and {b} the same character?',{a:drop,b:keep});
+   const yes=document.createElement('button'),no=document.createElement('button');yes.className=no.className='button secondary';
+   yes.textContent=t('Yes, one character');no.textContent=t('No, two characters');
+   const answer=text=>{const done=document.createElement('p');done.className='muted';done.textContent=text;row.replaceChildren(done);};
+   yes.onclick=()=>{byId('script-input').value=CueAI.joinCharacters(byId('script-input').value,keep,drop);
+    byId('cast-input').value=byId('cast-input').value.split('\n').filter(n=>n.trim()!==drop).join('\n');
+    if(window.CueCastInfo){delete window.CueCastInfo[drop];for(const info of Object.values(window.CueCastInfo))if(info.members)info.members=[...new Set(info.members.map(m=>m===drop?keep:m))];}
+    answer(t('{b} and {a} are now one character.',{a:keep,b:drop}));};
+   no.onclick=()=>answer(t('{a} and {b} stay two characters.',{a:drop,b:keep}));
+   row.append(q,yes,no);box.append(row);
+  }
  }
  const fallbackNote=ai=>ai&&!ai.ok?' '+t('AI reading didn’t work ({reason}), so Cue used its basic reader.',{reason:String(ai.reason).replace(/[.。]\s*$/,'')}):'';
  const isDocx=file=>/\.docx$/i.test(file.name)||file.type==='application/vnd.openxmlformats-officedocument.wordprocessingml.document';
@@ -44,7 +62,7 @@
   showDraft(text,name);status(t('Read the whole Word file. Review the draft below before saving.')+fallbackNote(ai));
  }
  byId('pdf-file').onchange=async e=>{
-  const file=e.target.files[0];e.target.value='';if(!file)return;const token=++generation;busy=true;controls();byId('pdf-pages').hidden=true;byId('pdf-review').hidden=true;
+  const file=e.target.files[0];e.target.value='';if(!file)return;const token=++generation;busy=true;controls();byId('pdf-pages').hidden=true;byId('pdf-review').hidden=true;askAbout([]);
   try{
    await dispose();if(file.size>25*1024*1024)throw Error(t('Choose a file smaller than 25 MB. Export a scene or compress your file first.'));
    if(/\.doc$/i.test(file.name)||file.type==='application/msword')throw Error(t('This is an older Word .doc file. Open it in Word or Pages, save it as .docx or PDF, and import that.'));

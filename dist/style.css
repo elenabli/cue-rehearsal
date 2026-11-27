@@ -240,3 +240,4 @@ body.learning .reader{padding-bottom:calc(110px + env(safe-area-inset-bottom))}
 .learn-line .snip-parts .snip-part:not(.on){color:var(--ink)}
 .learn-line .snip-parts .snip-part.on{box-shadow:0 0 0 2px var(--marker)}
 .stage-line.long-mine,body.rehearsing .stage-line.long-mine,#hint-text.long-mine{font-size:22px;line-height:1.55}
+.cast-questions{border-top:1px solid var(--cd0d0cd);margin-top:14px;padding-top:6px}.cast-question{margin-top:8px}.cast-question p{margin:6px 0;font-weight:550}.cast-question .button{margin:0 8px 8px 0}
