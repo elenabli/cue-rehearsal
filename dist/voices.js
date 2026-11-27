@@ -55,7 +55,7 @@
   }
   let voiceMap={},playId='';
   // Guests get natural voices for the demo and for the one play they read with AI (see CueAccount.guest); the phone voice reads the others.
-  const allowed=()=>!root.CueAccount||root.CueAccount.guest.voicesFor(playId,Object.keys(play.info||{}).length>0);
+  const allowed=()=>!root.CueAccount||root.CueAccount.guest.voicesFor(playId);
   function setPlay(next){
     playId=next.id||'';
     play={lang:next.lang||'',cast:[...(next.cast||[])],info:next.info||{}};

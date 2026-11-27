@@ -432,7 +432,7 @@
   'Your account':'Ваш аккаунт',
   'Already have an account?':'Уже есть аккаунт?',
   'Without an account':'Без аккаунта',
-  'Rehearse as much as you like. One play can be read with AI and get natural character voices. A free account lets you read more plays with AI.':'Репетируйте сколько угодно. Одну пьесу можно прочитать с помощью ИИ и озвучить естественными голосами. С бесплатным аккаунтом можно читать с ИИ больше пьес.',
+  'Rehearse as much as you like with your phone’s voice. One play can be read with AI. A free account lets you read more plays with AI and gives the characters natural voices.':'Репетируйте сколько угодно с голосом телефона. Одну пьесу можно прочитать с помощью ИИ. С бесплатным аккаунтом можно читать с ИИ больше пьес, а персонажи получают естественные голоса.',
   'You are signed in on this device.':'Вы вошли на этом устройстве.',
   'Delete my account':'Удалить мой аккаунт',
   'Account: {name}':'Аккаунт: {name}',

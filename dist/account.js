@@ -44,14 +44,14 @@
 
  async function remove(){const a=store.get();if(!a)return;await call('/account/delete',{},a.token);store.set(null);}
 
- // Guests (no account) may read one play with AI and give one play natural voices. Kept on this phone only,
+ // Guests (no account) may read one play with AI; natural voices need an account. Kept on this phone only,
  // so it is a soft limit; the proxy's daily limits per address are the real cap.
  const local={get:k=>{try{return root.localStorage.getItem(k);}catch{return null;}},set:(k,v)=>{try{root.localStorage.setItem(k,v);}catch{}}};
  const guest={
   canReadWithAI:()=>!!store.get()||local.get('cue-guest-ai')!=='1',
   readWithAI:()=>{if(!store.get())local.set('cue-guest-ai','1');},
-  // The demo play (no id) is free. Otherwise the first play read with AI (it has cast info) gets the voices.
-  voicesFor:(playId,readWithAI)=>{if(store.get()||!playId)return true;const k=local.get('cue-guest-voices');if(k)return k===playId;if(!readWithAI)return false;local.set('cue-guest-voices',playId);return true;},
+  // Natural (cloud) character voices come with an account. Guests hear the phone's own voice; the demo scene (no id) keeps them as a sample.
+  voicesFor:playId=>!!store.get()||!playId,
  };
 
  // The account button at the top of every screen, and the account screen.
