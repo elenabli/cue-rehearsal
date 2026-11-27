@@ -94,8 +94,8 @@ const Core = require('../dist/core.js');
   assert.strictEqual(parts[1].start, parts[0].lines.length + 1);
   assert.strictEqual(AI.splitParts(['A: hi']).length, 1);
   const merged = AI.mergeLabels([
-    { labels: { language: 'ru', title: 'П', cast: [{ name: 'ИВАН', aliases: ['ВАНЯ'], gender: 'm', age: 'adult' }, { name: 'МАША', aliases: [], gender: 'f', age: '?' }], scenes: [{ line: 1, title: 'A' }], marks: [[1, -3], [2, 0], [3, 1]] } },
-    { labels: { language: 'ru', title: '', cast: [{ name: 'Маша', aliases: [], gender: '?', age: 'young' }, { name: 'ВАНЯ', aliases: [], gender: 'm', age: '?' }, { name: 'КАБАН', aliases: [], gender: 'm', age: '?' }], scenes: [{ line: 4, title: 'B' }], marks: [[4, -3], [5, 0], [6, 1], [7, 2], [8, 7]] } },
+    { labels: { language: 'ru', title: 'П', cast: [{ name: 'ИВАН', aliases: ['ИВАН ПЕТРОВИЧ'], gender: 'm', age: 'adult' }, { name: 'МАША', aliases: [], gender: 'f', age: '?' }], scenes: [{ line: 1, title: 'A' }], marks: [[1, -3], [2, 0], [3, 1]] } },
+    { labels: { language: 'ru', title: '', cast: [{ name: 'Маша', aliases: [], gender: '?', age: 'young' }, { name: 'Иван Петрович', aliases: [], gender: 'm', age: '?' }, { name: 'КАБАН', aliases: [], gender: 'm', age: '?' }], scenes: [{ line: 4, title: 'B' }], marks: [[4, -3], [5, 0], [6, 1], [7, 2], [8, 7]] } },
   ]);
   assert.deepStrictEqual(merged.cast.map(c => c.name), ['ИВАН', 'МАША', 'КАБАН']);
   assert.strictEqual(merged.cast[1].age, 'young');
@@ -173,6 +173,48 @@ const Core = require('../dist/core.js');
   assert.strictEqual(sent.init.headers['x-api-key'], 'k');
   const piped = await AI.readStream(ok);
   assert.strictEqual(piped.labels.title, 'T');
+
+  // Import never joins different characters: «МАММА» is not «МАТЬ», «ПАППА» is not «ОТЕЦ».
+  for (const [a, b, same] of [['ИВАН', 'ИВАН ПЕТРОВИЧ', true], ['И. П.', 'ИВАН ПЕТРОВИЧ', true], ['Ив. Петр.', 'ИВАН ПЕТРОВИЧ', true],
+    ['ЛЁХА', 'Леха', true], ['МАММА', 'МАТЬ', false], ['ПАППА', 'ОТЕЦ', false], ['ПАПА', 'ПАППА', false],
+    ['ГОСТЬ', 'ПЕРВЫЙ ГОСТЬ', false], ['ДЕВУШКА', 'ДЕВУШКА 2', false], ['MUM', 'MOTHER', false]])
+    assert.strictEqual(AI.sameName(a, b), same, `${a} / ${b}`);
+  {
+    const family = AI.playLines('МАТЬ. Иди сюда.\nМАММА. Не пойдёт.\nОТЕЦ. Пойдёт.\nПАППА. Нет.\nПаппа (тихо). Да.');
+    const joined = { language: 'ru', title: '', scenes: [],
+      cast: [{ name: 'МАТЬ', aliases: ['МАММА'], gender: 'f', age: 'adult' }, { name: 'ОТЕЦ', aliases: ['ПАППА'], gender: 'm', age: 'adult' }],
+      marks: [[1, 0], [2, 0], [3, 1], [4, 1], [5, 1]] };
+    const fr = AI.toScript(family, joined);
+    assert.deepStrictEqual(fr.cast.map(c => [c.name, c.speeches]), [['МАТЬ', 1], ['ОТЕЦ', 1], ['МАММА', 1], ['ПАППА', 2]]);
+    assert.ok(fr.script.includes('МАММА: Не пойдёт.') && fr.script.includes('ПАППА: [тихо] Да.'), fr.script);
+    assert.deepStrictEqual(fr.doubts, [], 'they answer each other, so they are two people');
+    const merged = AI.mergeLabels([{ labels: joined }, { labels: { ...joined, cast: [{ name: 'МАММА', aliases: [], gender: 'f', age: '?' }], marks: [[1, 0]] } }]);
+    assert.deepStrictEqual(merged.cast.map(c => c.name), ['МАТЬ', 'ОТЕЦ', 'МАММА', 'ПАППА']);
+    assert.deepStrictEqual(merged.marks.at(-1), [1, 2]);
+  }
+
+  // Unsure names are asked about, unless the play shows two people; groups know their members.
+  {
+    const play = AI.playLines('ДЕЙСТВУЮЩИЕ ЛИЦА\nАННИКА\nСАРА\nМАТЬ\nМАММА\nСЦЕНА 1.\nАННИКА. Привет.\nСАРА. Привет.\nСУЛЕВИ. И я.\nДЕТИ. Мама!\nМАТЬ. Иду.\nСЦЕНА 2.\nВАНЯ. Где все?\n(Пауза.)\nСЦЕНА 3.\nИВАН. Я тут.\nМАММА. Ешьте.');
+    const labels = { language: 'ru', title: '', scenes: [{ line: 6, title: 'Сцена 1' }, { line: 12, title: 'Сцена 2' }, { line: 15, title: 'Сцена 3' }],
+      cast: [
+        { name: 'АННИКА', aliases: [], maybe: [], members: [], gender: 'f', age: 'child' },
+        { name: 'САРА', aliases: [], maybe: [], members: [], gender: 'f', age: 'child' },
+        { name: 'СУЛЕВИ', aliases: [], maybe: [], members: [], gender: 'm', age: 'child' },
+        { name: 'ДЕТИ', aliases: [], maybe: [], members: ['Анника', 'СУЛЕВИ', 'САРА', 'НИКТО'], gender: 'group', age: 'child' },
+        { name: 'МАТЬ', aliases: [], maybe: ['МАММА'], members: [], gender: 'f', age: 'adult' },
+        { name: 'МАММА', aliases: [], maybe: ['МАТЬ'], members: [], gender: 'f', age: 'adult' },
+        { name: 'ИВАН', aliases: ['ВАНЯ'], maybe: [], members: [], gender: 'm', age: 'adult' },
+      ],
+      marks: [[1, -2], [6, -3], [7, 0], [8, 1], [9, 2], [10, 3], [11, 4], [12, -3], [13, 6], [14, -1], [15, -3], [16, 6], [17, 5]] };
+    const r = AI.toScript(play, labels);
+    assert.deepStrictEqual(r.doubts, [{ keep: 'ИВАН', drop: 'ВАНЯ' }], JSON.stringify(r.doubts));
+    assert.deepStrictEqual(r.cast.find(c => c.name === 'ДЕТИ').members, ['АННИКА', 'СУЛЕВИ', 'САРА']);
+    assert.deepStrictEqual(r.cast.find(c => c.name === 'САРА').members, []);
+    const joined = AI.joinCharacters(r.script, 'ИВАН', 'ВАНЯ');
+    assert.ok(joined.includes('ИВАН: Где все?') && !/^ВАНЯ$/m.test(joined) && !joined.includes('ВАНЯ:'), joined);
+    assert.strictEqual(AI.joinCharacters('ВАНЯ: Иван, иди.\nИВАН: Да.', 'ИВАН', 'ВАНЯ'), 'ИВАН: Иван, иди.\nИВАН: Да.');
+  }
 
   console.log('ai-import tests passed');
 })().catch(e => { console.error(e); process.exit(1); });

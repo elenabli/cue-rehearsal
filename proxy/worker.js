@@ -29,7 +29,7 @@ A long play comes in parts that are read separately. A part says so above its li
 
 Scenes: use the smallest unit the play numbers (scene or явление rather than act). Give each scene in "scenes" as {line, title}, with the line of its -3 mark and a short title as the play writes it («Сцена 3. Квартира Гордеевых. День.», "Act 1, Scene 2"). If the play has no headings, add -3 marks where the place or time changes, on the first line of that stretch, with a short title you write.
 
-Cast: every character who speaks, once, by the name their speech labels use most (keep the play's capitals). Merge spellings of one person («ИВАН», «Иван Петрович», «И. П.») and list the other spellings in "aliases". Groups who speak together («ВСЕ», "BOTH") are characters too. A word in capitals inside a speech or a direction is not a character. Gender: f, m, group or "?"; age: child, young, adult, old or "?".
+Cast: every character who speaks, once, by the name their speech labels use most, written exactly as the play writes it (keep the play's capitals). Never drop, rename or join characters: every different speech label is its own character, even when two of them could mean the same kind of person («МАТЬ» and «МАММА», «ОТЕЦ» and «ПАППА», "MOTHER" and "MUM" are two characters). "aliases" is only for the same name written shorter or longer: a first name or surname alone, initials, an abbreviation with a dot («ИВАН», «И. П.», «Ив. Петр.» for «ИВАН ПЕТРОВИЧ»). When unsure, keep them apart with empty "aliases" and name the other one in "maybe": the characters this one could be the same person as («ВАНЯ» for «ИВАН»), left empty when it is clearly a person of its own. A group ("members"): when a speech label stands for several characters speaking together («ДЕТИ» for «АННИКА», «СУЛЕВИ» and «САРА»; "BOTH"), list in "members" the cast names of the characters it is made of, if the play says so or the scenes make it clear; otherwise, and for anyone who is not a group, leave it empty. Groups who speak together («ВСЕ», "BOTH") are characters too. A word in capitals inside a speech or a direction is not a character. Gender: f, m, group or "?"; age: child, young, adult, old or "?".
 
 Never rewrite, correct, translate or summarise the play. Only point at line numbers.`;
 
@@ -45,10 +45,12 @@ const SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['name', 'aliases', 'gender', 'age'],
+        required: ['name', 'aliases', 'maybe', 'members', 'gender', 'age'],
         properties: {
           name: { type: 'string' },
           aliases: { type: 'array', items: { type: 'string' } },
+          maybe: { type: 'array', items: { type: 'string' } },
+          members: { type: 'array', items: { type: 'string' } },
           gender: { type: 'string', enum: ['f', 'm', 'group', '?'] },
           age: { type: 'string', enum: ['child', 'young', 'adult', 'old', '?'] },
         },

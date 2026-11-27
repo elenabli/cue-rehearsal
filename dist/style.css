@@ -245,3 +245,4 @@ body.learning .reader{padding-bottom:calc(110px + env(safe-area-inset-bottom))}
 /* Narrow phones (iPhone SE/mini, small Android): keep the whole top bar, including Sign in, on screen */
 @media(max-width:420px){aside{padding-left:12px;padding-right:8px}.nav,.nav.active{padding:0 5px;font-size:13px}.mobile-help{width:34px;margin-left:0}.aside-main .account-button{margin-left:2px;padding:5px 8px}}
 @media(max-width:370px){.brand{font-size:20px;letter-spacing:-1px}.nav,.nav.active{padding:0 4px;font-size:12.5px}.mobile-help{width:30px}}
+.cast-questions{border-top:1px solid var(--cd0d0cd);margin-top:14px;padding-top:6px}.cast-question{margin-top:8px}.cast-question p{margin:6px 0;font-weight:550}.cast-question .button{margin:0 8px 8px 0}
