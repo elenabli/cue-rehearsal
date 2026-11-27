@@ -53,13 +53,16 @@
     }
     return map;
   }
-  let voiceMap={};
+  let voiceMap={},playId='';
+  // Guests get natural voices for the demo and for the one play they read with AI (see CueAccount.guest); the phone voice reads the others.
+  const allowed=()=>!root.CueAccount||root.CueAccount.guest.voicesFor(playId,Object.keys(play.info||{}).length>0);
   function setPlay(next){
+    playId=next.id||'';
     play={lang:next.lang||'',cast:[...(next.cast||[])],info:next.info||{}};
     if(list&&listLang===play.lang)voiceMap=assign(list,play.cast,play.info);else{voiceMap={};loadList();}
   }
   async function loadList(){
-    const lang=play.lang;if(!lang||!on())return;
+    const lang=play.lang;if(!lang||!on()||!allowed())return;
     try{const saved=JSON.parse(store.get('cue-voice-list:'+lang)||'null');if(saved&&Date.now()-saved.at<LIST_DAYS*864e5&&saved.voices.length){list=saved.voices;listLang=lang;voiceMap=assign(list,play.cast,play.info);return;}}catch{}
     try{const r=await fetch(PROXY+'/voices?lang='+encodeURIComponent(lang));if(!r.ok)throw Error('status '+r.status);const body=await r.json();
       if(lang!==play.lang)return;list=body.voices||[];listLang=lang;store.set('cue-voice-list:'+lang,JSON.stringify({at:Date.now(),voices:list}));voiceMap=assign(list,play.cast,play.info);log('voices: '+list.length+' for '+lang);
@@ -92,14 +95,14 @@
   // Make the audio for these lines ahead of time: [{who,text}], a few at once, in order.
   let queue=[],running=0;
   function warm(items){
-    if(!on())return;
+    if(!on()||!allowed())return;
     if(!list){loadList().then(()=>list&&warm(items));return;}
     queue=[];for(const {who,text} of items){const voice=voiceMap[who]?.voice;if(!voice)continue;for(const p of pieces(text))if(!ready.has(keyOf(voice,p)))queue.push({voice,text:p});}
     pump();
   }
   function pump(){while(running<PARALLEL&&queue.length&&!blocked){const job=queue.shift();running++;clip(job.voice,job.text).catch(err=>log('voices: line failed ('+err.message+')')).finally(()=>{running--;pump();});}}
   // The audio ready for this line now, or null (then the device voice reads it).
-  function readyFor(who,text){if(!on())return null;const voice=voiceMap[who]?.voice;if(!voice)return null;const parts=pieces(text).map(p=>ready.get(keyOf(voice,p)));return parts.length&&parts.every(Boolean)?parts:null;}
+  function readyFor(who,text){if(!on()||!allowed())return null;const voice=voiceMap[who]?.voice;if(!voice)return null;const parts=pieces(text).map(p=>ready.get(keyOf(voice,p)));return parts.length&&parts.every(Boolean)?parts:null;}
 
   // Natural voices play through Web Audio, like the hands-free tones. On iPhone an <audio> element
   // that has played keeps hold of the audio route, and the mic opened after it hears nothing.

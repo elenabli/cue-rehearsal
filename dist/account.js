@@ -42,19 +42,43 @@
  // Check the session now and then; a session ended elsewhere signs this phone out.
  async function refresh(){const a=store.get();if(!a)return null;try{const me=await call('/account',null,a.token);if(me.name!==a.name)store.set({...a,name:me.name});return store.get();}catch(e){if(e.status===401){store.set(null);return null;}return a;}}
 
- // Settings → Account.
+ async function remove(){const a=store.get();if(!a)return;await call('/account/delete',{},a.token);store.set(null);}
+
+ // Guests (no account) may read one play with AI and give one play natural voices. Kept on this phone only,
+ // so it is a soft limit; the proxy's daily limits per address are the real cap.
+ const local={get:k=>{try{return root.localStorage.getItem(k);}catch{return null;}},set:(k,v)=>{try{root.localStorage.setItem(k,v);}catch{}}};
+ const guest={
+  canReadWithAI:()=>!!store.get()||local.get('cue-guest-ai')!=='1',
+  readWithAI:()=>{if(!store.get())local.set('cue-guest-ai','1');},
+  // The demo play (no id) is free. Otherwise the first play read with AI (it has cast info) gets the voices.
+  voicesFor:(playId,readWithAI)=>{if(store.get()||!playId)return true;const k=local.get('cue-guest-voices');if(k)return k===playId;if(!readWithAI)return false;local.set('cue-guest-voices',playId);return true;},
+ };
+
+ // The account button at the top of every screen, and the account screen.
+ let showReason=()=>{};
+ function open(reason){showReason(reason||'');if(typeof root.showView==='function')root.showView('account');}
  function bind(doc=root.document){
-  const $=id=>doc.getElementById(id);if(!$('account'))return;
-  const show=()=>{const a=store.get();$('account-out').hidden=!!a;$('account-in').hidden=!a;if(a)$('account-who').textContent=a.name;};
+  const $=id=>doc.getElementById(id);if(!$('account')||!$('account-button'))return;
+  const initial=n=>([...String(n).trim()][0]||'·').toUpperCase();
+  const show=()=>{const a=store.get();$('account-out').hidden=!!a;$('account-in').hidden=!a;
+   const b=$('account-button');b.classList.toggle('signed-in',!!a);b.textContent=a?initial(a.name):t('Sign in');
+   b.setAttribute('aria-label',a?t('Account: {name}',{name:a.name}):t('Sign in or create an account'));
+   $('account-title').textContent=a?t('Account'):t('Your account');
+   if(a){$('account-who').textContent=a.name;$('account-avatar').textContent=initial(a.name);$('account-reason').hidden=true;}};
+  showReason=r=>{const el=$('account-reason');el.textContent=r;el.hidden=!r||!!store.get();};
   const say=m=>{$('account-message').textContent=m||'';};
-  const busy=on=>{for(const id of ['account-create','account-signin','account-signout'])$(id).disabled=on;};
-  const run=async job=>{say('');if(!supported()){say(t('This browser can’t use passkeys. Open Cue in Safari or Chrome.'));return;}busy(true);try{await job();}catch(e){if(!cancelled(e))say(e.message||t('Something went wrong. Try again.'));}finally{busy(false);show();}};
+  const busy=on=>{for(const id of ['account-create','account-signin','account-signout','account-delete'])$(id).disabled=on;};
+  const run=async job=>{say('');if(!supported()){say(t('This browser can’t use passkeys. Open Cue in Safari or Chrome.'));return;}busy(true);try{await job();$('account-name').value='';}catch(e){if(!cancelled(e))say(e.message||t('Something went wrong. Try again.'));}finally{busy(false);show();}};
+  $('account-button').onclick=()=>{say('');showReason('');open();};
   $('account-create').onclick=()=>{const name=$('account-name').value.trim();if(!name){say(t('Type your name.'));$('account-name').focus();return;}run(()=>create(name));};
   $('account-name').onkeydown=e=>{if(e.key==='Enter')$('account-create').click();};
   $('account-signin').onclick=()=>run(signIn);
   $('account-signout').onclick=async()=>{busy(true);await signOut();busy(false);say('');show();};
+  $('account-delete').onclick=async()=>{if(!root.confirm(t('Delete your account? Your plays stay on this phone.')))return;say('');busy(true);
+   try{await remove();say(t('Account deleted. You can also remove the Cue passkey in your phone’s password settings.'));}catch(e){say(e.message);}finally{busy(false);show();}};
+  if(root.CueI18n){const set=root.CueI18n.setLang;root.CueI18n.setLang=l=>{set(l);show();};}
   show();refresh().then(show);}
 
- root.CueAccount={get current(){return store.get();},create,signIn,signOut,refresh,bind,_json:{creationOptions,requestOptions,credentialJSON,toB64,toBytes}};
+ root.CueAccount={get current(){return store.get();},create,signIn,signOut,remove,refresh,bind,open,guest,_json:{creationOptions,requestOptions,credentialJSON,toB64,toBytes}};
  if(root.document)bind();
 })(typeof window!=='undefined'?window:globalThis);
