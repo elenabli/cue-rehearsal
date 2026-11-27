@@ -102,11 +102,15 @@ export class Account {
     if (s.last_used < now - 3600000) this.sql.exec('UPDATE sessions SET last_used = ? WHERE hash = ?', now, hash);
     return this.profile();
   }
+  // Delete the account: name, passkeys and sessions. The passkey stays on the phone but no longer signs in.
+  deleteAccount() {
+    this.sql.exec('DELETE FROM sessions; DELETE FROM passkeys; DELETE FROM profile; DELETE FROM challenges;');
+  }
   async endSession(secret) {
     this.sql.exec('DELETE FROM sessions WHERE hash = ?', await sha256(secret));
   }
 }
-Account.METHODS = ['keepChallenge', 'useChallenge', 'profile', 'create', 'passkey', 'signedIn', 'checkSession', 'endSession'];
+Account.METHODS = ['keepChallenge', 'useChallenge', 'profile', 'create', 'passkey', 'signedIn', 'checkSession', 'endSession', 'deleteAccount'];
 
 // A small client for one Account object: account(env, id).profile() and so on.
 function stubFor(env, name) {
@@ -206,6 +210,13 @@ export async function accountRoute(request, env, path, limit) {
   if (path === '/account/logout' && request.method === 'POST') {
     const me = await whoIs(request, env);
     if (me) await account(env, me.id).endSession(me.token.split('.')[1]);
+    return { status: 200, body: { ok: true } };
+  }
+
+  if (path === '/account/delete' && request.method === 'POST') {
+    const me = await whoIs(request, env);
+    if (!me) return { status: 401, body: { error: 'Signed out.' } };
+    await account(env, me.id).deleteAccount();
     return { status: 200, body: { ok: true } };
   }
 

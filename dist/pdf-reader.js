@@ -21,6 +21,8 @@
  // Smart import: Claude splits the play. Returns {ok:true}, {ok:false,reason} or null when not tried.
  async function smartDraft(text,name){
   const code=aiCode();if(!aiOn()||!window.CueAI||navigator.onLine===false)return null;
+  // A guest reads one play with AI; after that, the basic reader and an invitation to create a free account.
+  if(window.CueAccount&&!CueAccount.guest.canReadWithAI())return {ok:false,limit:true};
   const started=Date.now();const secs=()=>Math.round((Date.now()-started)/1000);
   status(t('Reading the play with AI… {s} s',{s:0}));const tick=setInterval(()=>status(t('Reading the play with AI… {s} s',{s:secs()})),1000);
   try{
@@ -31,17 +33,20 @@
    const review=byId('pdf-review');review.hidden=false;
    const notes=(r.notes||[]).join(' ');
    if(r.warnings.length)review.innerHTML=found+' '+t('Please check:')+listHtml(r.warnings)+(notes?'<p>'+notes.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))+'</p>':'');else review.textContent=found+(notes?' '+notes:'')+' '+t('Look it over, then choose Save and rehearse.');
+   window.CueAccount?.guest.readWithAI();
    status(t('Read with AI in {s} s.',{s:secs()}));return {ok:true};
   }catch(error){return {ok:false,reason:error.message};}
   finally{clearInterval(tick);}
  }
- const fallbackNote=ai=>ai&&!ai.ok?' '+t('AI reading didn’t work ({reason}), so Cue used its basic reader.',{reason:String(ai.reason).replace(/[.。]\s*$/,'')}):'';
+ const fallbackNote=ai=>ai&&ai.limit?' '+t('Your free AI reading is used, so Cue used its basic reader.'):ai&&!ai.ok?' '+t('AI reading didn’t work ({reason}), so Cue used its basic reader.',{reason:String(ai.reason).replace(/[.。]\s*$/,'')}):'';
+ // After the free AI reading is used: a button to the account screen under the status line.
+ const offerAccount=ai=>{if(!ai||!ai.limit||!window.CueAccount)return;const b=document.createElement('button');b.className='text-button account-offer';b.textContent=t('Create a free account to read more plays with AI');b.onclick=()=>CueAccount.open(t('Your free AI reading is used. Create a free account to read more plays with AI.'));byId('pdf-status').append(' ',b);};
  const isDocx=file=>/\.docx$/i.test(file.name)||file.type==='application/vnd.openxmlformats-officedocument.wordprocessingml.document';
  async function openDocx(file){
   status(t('Reading your Word file…'));const text=await CueDocx.docxToText(new Uint8Array(await file.arrayBuffer()));
   if(!text.trim())throw Error(t('No text was found in this Word file. Choose another file.'));
   const name=file.name.replace(/\.docx$/i,''),ai=await smartDraft(text,name);if(ai&&ai.ok)return;
-  showDraft(text,name);status(t('Read the whole Word file. Review the draft below before saving.')+fallbackNote(ai));
+  showDraft(text,name);status(t('Read the whole Word file. Review the draft below before saving.')+fallbackNote(ai));offerAccount(ai);
  }
  byId('pdf-file').onchange=async e=>{
   const file=e.target.files[0];e.target.value='';if(!file)return;const token=++generation;busy=true;controls();byId('pdf-pages').hidden=true;byId('pdf-review').hidden=true;
@@ -68,7 +73,7 @@
    const text=pages.join('\n');if(!text.trim())throw Error(t('No selectable text was found. This looks like a scanned PDF. Run text recognition (OCR) in your PDF app, save it as a searchable PDF, and try again. Your current script has been kept.'));
    const ai=await smartDraft(text,pdfName);if(ai&&ai.ok)return;
    showDraft(text,pdfName);
-   status(t('Extracted {n} pages.',{n:to-from+1})+(emptyPages?t(' {n} page(s) had no text and were omitted; review the PDF for missing dialogue.',{n:emptyPages}):'')+t(' Review the draft below before saving.')+fallbackNote(ai));
+   status(t('Extracted {n} pages.',{n:to-from+1})+(emptyPages?t(' {n} page(s) had no text and were omitted; review the PDF for missing dialogue.',{n:emptyPages}):'')+t(' Review the draft below before saving.')+fallbackNote(ai));offerAccount(ai);
   }catch(error){status(error.message||t('Couldn’t extract this PDF. Your current script has been kept. Try another file.'),true);}
   finally{busy=false;controls();}
  };
