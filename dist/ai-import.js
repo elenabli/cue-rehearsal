@@ -52,11 +52,34 @@
     return /^\s*(?:\([^)]*\))?\s*[.:](?:\s|$)/u.test(rest)&&rest.replace(/^\s*(?:\([^)]*\))?\s*[.:]/u,'').trim()||!rest.trim()?name:null;
   }
 
+  // Import never joins two characters. An alias the model gives must be the same name written
+  // shorter or longer («ИВАН», «И. П.», «Ив.» for «ИВАН ПЕТРОВИЧ»); any other alias («МАММА» for
+  // «МАТЬ», «ПАППА» for «ОТЕЦ») is split off as a character of its own, named as the play writes it.
+  const nameWords=v=>String(v).normalize('NFKC').toLocaleLowerCase().replace(/ё/g,'е').split(/[\s.]+/).filter(Boolean);
+  const ORDINAL=/^(?:\d+(?:-?[а-яa-z]{1,3})?|[ivx]+|перв|втор|трет|четв|пят|шест|старш|младш|first|second|third|fourth|fifth|elder|younger|old|young)/u;
+  function sameName(a,b){
+    const A=nameWords(a),B=nameWords(b);if(!A.length||!B.length)return false;if(A.join(' ')===B.join(' '))return true;
+    const [few,many]=A.length<=B.length?[A,B]:[B,A];
+    // A word stands for another if it is the same word or clearly cut short (at least two letters missing).
+    const fits=(w,v)=>w===v||(v.startsWith(w)&&v.length-w.length>=2);
+    let j=0;const used=new Set();
+    for(const w of few){while(j<many.length&&!fits(w,many[j]))j++;if(j>=many.length)return false;used.add(j++);}
+    // «ГОСТЬ» and «ПЕРВЫЙ ГОСТЬ», «ДЕВУШКА» and «ДЕВУШКА 2» are different people.
+    return !many.some((v,k)=>!used.has(k)&&ORDINAL.test(v));
+  }
+  function splitAliases(cast){
+    const out=cast.map(c=>({...c,name:String(c.name||'').trim(),aliases:[]})),extra=[];
+    cast.forEach((c,i)=>{for(const a of (c.aliases||[]).map(x=>String(x).trim()).filter(Boolean)){
+      if(sameName(a,out[i].name))out[i].aliases.push(a);
+      else if(![...out,...extra].some(d=>nameWords(d.name).join(' ')===nameWords(a).join(' ')))extra.push({name:a,aliases:[],gender:c.gender||'?',age:c.age||'?',splitFrom:out[i].name});}});
+    return [...out,...extra];
+  }
+
   // Turn the model's marks into Cue's script text (Сцена/Scene headings,
   // NAME: speech, [direction]) and list anything that looks wrong.
   function toScript(lines,labels){
     const en=labels.language==='en',warnings=[];
-    const cast=(labels.cast||[]).map(c=>({...c,name:String(c.name||'').trim(),aliases:(c.aliases||[]).map(a=>String(a).trim()).filter(Boolean)}));
+    const cast=splitAliases(labels.cast||[]),split=cast.filter(c=>c.splitFrom);
     const titles=new Map((labels.scenes||[]).map(s=>[s.line,String(s.title||'').trim()]));
     const marks=(labels.marks||[]).filter(m=>Array.isArray(m)&&m.length>=2&&Number.isInteger(m[0])&&Number.isInteger(m[1])&&m[0]>=1&&m[0]<=lines.length).sort((a,b)=>a[0]-b[0]).filter((m,i,a)=>!i||m[0]!==a[i-1][0]);
     if(!marks.length){warnings.push(tr('The AI marked nothing.'));}
@@ -88,12 +111,17 @@
       for(let j=1;j<rows.length;j++)if(speakerFor(lineLabel(rows[j]))){parts.push(rows.slice(start,j));start=j;}
       parts.push(rows.slice(start));
       parts.forEach((part,n)=>{
-        const byLabel=speakerFor(lineLabel(part[0]));
+        let byLabel=speakerFor(lineLabel(part[0]));
+        // A speech the model gave to «МАТЬ» that opens with «Мамма.» belongs to МАММА.
+        if(!byLabel&&split.length){const first=key(part[0]),opens=c=>first.startsWith(key(c.name))&&!/[\p{L}\d]/u.test(first.charAt(key(c.name).length));
+          const own=cast[code]?[cast[code].name,...cast[code].aliases].map(n=>({name:n})):[];
+          const best=[...split,...own].filter(opens).sort((a,b)=>b.name.length-a.name.length)[0];if(best&&best.splitFrom)byLabel=best;}
         const who=byLabel||(n===0?cast[code]:null);
         if(!who||!who.name){badIndex++;return;}
         speech(who,part,!byLabel);
       });
     }
+    const apart=split.filter(c=>speeches.has(c.name));if(apart.length)notes.push(tr('Kept as separate characters: {names}.',{names:apart.map(c=>c.splitFrom+' / '+c.name).join(', ')}));
     if(added.length)notes.push(tr('Added characters the AI missed: {names}.',{names:added.join(', ')}));
     if(badIndex)warnings.push(tr('{n} speech(es) had no known speaker and were left out.',{n:badIndex}));
     for(const [k,n] of mismatch){const [label,who]=k.split('\u0000');warnings.push(tr('A speech that starts with «{label}» was given to {who} ({n}×).',{label,who,n}));}
@@ -127,9 +155,10 @@
     const key=v=>String(v).toLocaleLowerCase().replace(/ё/g,'е').replace(/[\s-]+/g,' ').trim();
     const cast=[],byKey=new Map(),marks=[],scenes=[];
     for(const {labels} of results){
-      const map=(labels.cast||[]).map(c=>{
+      const map=splitAliases(labels.cast||[]).map(c=>{
         const names=[c.name,...(c.aliases||[])].filter(Boolean);let g=names.map(n=>byKey.get(key(n))).find(Boolean);
         if(!g){g={name:String(c.name||'').trim(),aliases:[],gender:c.gender||'?',age:c.age||'?',index:cast.length};cast.push(g);}
+        if(c.splitFrom&&!g.splitFrom)g.splitFrom=c.splitFrom;
         for(const n of names){if(!byKey.has(key(n)))byKey.set(key(n),g);if(key(n)!==key(g.name)&&!g.aliases.some(a=>key(a)===key(n)))g.aliases.push(String(n).trim());}
         if(g.gender==='?')g.gender=c.gender||'?';if(g.age==='?')g.age=c.age||'?';return g.index;
       });
@@ -163,5 +192,5 @@
     return {labels,usage,model:model_,stopReason:results[0].stopReason,...toScript(lines,labels),parts:pieces.length,seconds:(Date.now()-started)/1000,cost:cost(usage,model_),lines:lines.length};
   }
 
-  const api={playLines,readStream,toScript,stripLabel,lineLabel,splitParts,mergeLabels,cost,smartImport,PRICES};root.CueAI=api;if(typeof module!=='undefined')module.exports=api;
+  const api={playLines,readStream,toScript,stripLabel,lineLabel,splitParts,mergeLabels,sameName,splitAliases,cost,smartImport,PRICES};root.CueAI=api;if(typeof module!=='undefined')module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

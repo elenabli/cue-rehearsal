@@ -332,6 +332,7 @@
   'Speaks only once (maybe a misspelling): {names}.':'Говорит только один раз (возможно, опечатка): {names}.',
   '{n} scene(s) without words.':'Сцен без слов: {n}.',
   'Added characters the AI missed: {names}.':'Добавлены персонажи, которых ИИ пропустил: {names}.',
+  'Kept as separate characters: {names}.':'Оставлены отдельными персонажами: {names}.',
   'Read the whole Word file. Review the draft below before saving.':'Файл Word прочитан целиком. Проверьте черновик ниже перед сохранением.',
   'Couldn’t open this file. Try another file.':'Не удалось открыть файл. Попробуйте другой.',
   'This browser can’t open Word files. Update it, or save the play as PDF and import that.':'Этот браузер не умеет открывать файлы Word. Обновите его или сохраните пьесу в PDF и загрузите её.',
