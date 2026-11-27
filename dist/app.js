@@ -146,7 +146,7 @@ function speakAs(who,text,onDone){const V=window.CueVoices,said=typeof spokenTex
   fail:why=>{slog('voice: natural failed ('+why+'), device voice instead');if(!live())return;activeUtterance=null;speaking=false;if(!speak(text,onDone)){render();onDone?.();}}},V.tuneOf(who));return true;}
 // Make the scene's partner lines (and the next scene's) into audio ahead of time.
 let warmKey='';function warmVoices(){const V=window.CueVoices;if(!V||!V.on())return;const key=[data.playId,data.activeScene,data.role,data.language,data.cast.join('|')].join('\n');if(key===warmKey)return;warmKey=key;
- V.setPlay({lang:data.language,cast:roles,info:data.castInfo||{}});const said=text=>typeof spokenText==='function'?spokenText(text):text,items=[];
+ V.setPlay({id:data.playId,lang:data.language,cast:roles,info:data.castInfo||{}});const said=text=>typeof spokenText==='function'?spokenText(text):text,items=[];
  for(const at of [data.activeScene,data.activeScene+1]){const scene=data.scenes[at];if(!scene)continue;let ls=[];try{ls=sceneLines(scene);}catch{}for(const l of ls)if(!isMine(l))items.push({who:l.speaker,text:said(l.text)});}
  V.warm(items);}
 window.CueVoiceLog=m=>slog(m);
@@ -405,5 +405,4 @@ function closeWelcome(){data.welcomed=true;$('welcome').hidden=true;persist();}
 $('welcome').hidden=!!data.welcomed;
 $('welcome-add').onclick=()=>{closeWelcome();showView('script');};
 $('welcome-demo').onclick=closeWelcome;
-$('welcome-account').onclick=()=>{showView('settings');const signedIn=window.CueAccount?.current;if(!signedIn)setTimeout(()=>$('account-name').focus(),50);};
 render();if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});

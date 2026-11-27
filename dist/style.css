@@ -193,7 +193,7 @@ body.rehearsing #start{gap:8px}
 .settings-card h3{font-size:16px;margin:26px 0 6px}
 .settings-card>label{margin-top:18px}
 .standalone .browser-only{display:none!important}
-.aside-main{margin-top:40px}
+@media(min-width:851px){.aside-main{margin-top:40px}}
 /* First visit */
 .welcome{border:1.5px solid var(--ink);border-radius:10px;padding:18px 18px 16px;margin:0 0 22px}
 .welcome h2{font-size:20px;margin:0 0 6px}
@@ -212,7 +212,6 @@ body.rehearsing.pocket .pocket-guard.dark{background:#000}
 body.rehearsing.pocket .pocket-guard.dark span{color:#a3a3a3;font-size:15px;border-top-color:#333}
 .pdf-review ul{margin:6px 0 0;padding-left:18px}
 
-.account-setting h3{margin:0 0 4px}.account-setting>div>p{margin:0 0 12px}.auto-listen-setting #account-name{display:block;width:100%;height:auto;margin-bottom:12px;accent-color:auto}.account-buttons{display:flex;flex-wrap:wrap;gap:10px}.account-buttons .button{flex:1;white-space:nowrap}#account-message:empty{display:none}#account-message{margin:10px 0 0}
 .welcome-steps{margin:0 0 16px;padding-left:20px;font-size:15px;line-height:1.5}.welcome-steps li{margin-bottom:4px}.welcome-account{display:block;margin:12px auto 0;text-decoration:underline;text-underline-offset:3px}
 /* Learn by heart: the chosen line in pieces; the chosen piece gets the highlighter. */
 .read-line>button.read-learn{display:flex;width:100%;text-align:center;justify-content:center;min-height:46px;font-size:16px;border-radius:10px;padding:0 18px;margin:0 0 12px}
@@ -240,4 +239,10 @@ body.learning .reader{padding-bottom:calc(110px + env(safe-area-inset-bottom))}
 .learn-line .snip-parts .snip-part:not(.on){color:var(--ink)}
 .learn-line .snip-parts .snip-part.on{box-shadow:0 0 0 2px var(--marker)}
 .stage-line.long-mine,body.rehearsing .stage-line.long-mine,#hint-text.long-mine{font-size:22px;line-height:1.55}
+.account-button{margin-left:6px;min-height:34px;padding:6px 12px;border-radius:17px;border:1.5px solid var(--ink);background:transparent;font-size:13px;font-weight:650;white-space:nowrap}.account-button.signed-in{width:34px;padding:0;border-color:var(--lime);background:var(--lime);color:#141414;display:grid;place-items:center}.aside-main .account-button{flex:none}.account-card{max-width:520px}.account-card .button{width:100%}.account-card>div>p{font-size:15px;line-height:1.5;color:var(--muted);margin:0 0 18px}.account-card label{display:block;font-weight:600;margin:0 0 8px}.account-card #account-name{display:block;width:100%;margin-bottom:14px}.account-or{text-align:center;margin:24px 0 8px!important}.account-card h3{margin:32px 0 6px;font-size:15px}.account-reason{background:var(--lime);color:#141414;border-radius:8px;padding:12px 14px;margin:0 0 20px;font-size:15px;line-height:1.45}.account-who{display:flex;align-items:center;gap:12px;font-size:20px;margin:0 0 10px}.account-avatar{width:44px;height:44px;border-radius:50%;background:var(--lime);color:#141414;display:grid;place-items:center;font-weight:700;font-size:19px}.account-delete{display:block;margin:28px auto 0;color:var(--muted);text-decoration:underline;text-underline-offset:3px}#account-message:empty{display:none}#account-message{margin:16px 0 0;font-size:15px;line-height:1.45}.account-offer{text-decoration:underline;text-underline-offset:3px;font-weight:600;color:var(--ink);padding:4px 0}
+/* Phone and tablet: the top bar keeps its height on short pages (the grid used to stretch it) */
+@media(max-width:850px){.shell{grid-template-rows:auto 1fr}}
+/* Narrow phones (iPhone SE/mini, small Android): keep the whole top bar, including Sign in, on screen */
+@media(max-width:420px){aside{padding-left:12px;padding-right:8px}.nav,.nav.active{padding:0 5px;font-size:13px}.mobile-help{width:34px;margin-left:0}.aside-main .account-button{margin-left:2px;padding:5px 8px}}
+@media(max-width:370px){.brand{font-size:20px;letter-spacing:-1px}.nav,.nav.active{padding:0 4px;font-size:12.5px}.mobile-help{width:30px}}
 .cast-questions{border-top:1px solid var(--cd0d0cd);margin-top:14px;padding-top:6px}.cast-question{margin-top:8px}.cast-question p{margin:6px 0;font-weight:550}.cast-question .button{margin:0 8px 8px 0}
